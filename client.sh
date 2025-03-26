@@ -1,5 +1,4 @@
 #!/bin/bash
-# 保存为 ~/scripts/audio_recorder.sh
 
 # 配置参数
 SERVER_URL="http://localhost:8000/transcribe"  # 服务端地址
@@ -16,9 +15,8 @@ if [ -f "$PID_FILE" ]; then
     kill -SIGTERM $(cat "$PID_FILE") && rm -f "$PID_FILE"
     # 发送录音文件
     if [ -f "$AUDIO_FILE" ]; then
-        response=$(curl -s -F "file=@$AUDIO_FILE" "$SERVER_URL")
+        curl -s -F "file=@$AUDIO_FILE" "$SERVER_URL" | jq -r '.text' | wtype -
         rm "$AUDIO_FILE"
-        wtype $response
     fi
 else
     # 开始录音（PulseAudio 版本）

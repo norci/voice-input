@@ -27,7 +27,6 @@ async def transcribe_audio(file: UploadFile = File(...)):
             initial_prompt="简体中文与英文混合内容，没有其他语言的内容",
 )
         full_text = " ".join(segment.text for segment in segments)
-        return full_text.strip()
         return {
             "language": info.language,
             "text": full_text.strip()
