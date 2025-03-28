@@ -1,6 +1,9 @@
+#!/usr/bin/uv run
 # server.py
 import os
 import tempfile
+import uvicorn
+
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from faster_whisper import WhisperModel
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com/"
@@ -32,5 +35,4 @@ async def transcribe_audio(file: UploadFile = File(...)):
             return {"text": "","error": str(e)}
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
