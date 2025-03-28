@@ -2,27 +2,28 @@
 
 # 配置参数
 SERVER_URL="http://localhost:8000/transcribe"  # 服务端地址
-TMP_DIR="$HOME/.cache/audio_recorder"          # 临时文件目录
-PID_FILE="$TMP_DIR/recording.pid"              # 进程锁文件
-AUDIO_FILE="$TMP_DIR/last_recording.mp3"       # 录音文件路径
-
+TMP_DIR="$XDG_RUNTIME_DIR/voice-input"          # 临时文件目录
+AUDIO_FILE="$TMP_DIR/last_recording"       # 录音文件路径
+PIDFILE="$TMP_DIR/pid"       # 录音文件路径
+NTF="$TMP_DIR/ntf"
+# whisper: m4a mp3 webm mp4 mpga wav mpeg
 # 创建缓存目录
-mkdir -p "$TMP_DIR"
+-d "$TMP_DIR" || mkdir -p "$TMP_DIR"
 
 # 检查是否正在录音
-if [ -f "$PID_FILE" ]; then
+if [ -f $PIDFILE ]; then
     # 停止录音
-    kill -SIGTERM $(cat "$PID_FILE") && rm -f "$PID_FILE"
+    sleep 0.1; kill -SIGTERM $(cat $PIDFILE) ; rm $PIDFILE
     # 发送录音文件
     if [ -f "$AUDIO_FILE" ]; then
-        curl -s -F "file=@$AUDIO_FILE" "$SERVER_URL" | jq -r '.text' | wtype -
-        rm "$AUDIO_FILE"
+	notify-send -r $(cat $NTF) "开始识别"
+        wtype $(curl -s -F "file=@$AUDIO_FILE" "$SERVER_URL" | jq -r '.text')
+#        rm "$AUDIO_FILE"
+	notify-send -r $(cat $NTF) -t 2000 "识别结束"
     fi
 else
+    notify-send -p "语音输入..." > $NTF
     # 开始录音（PulseAudio 版本）
-    echo "开始录音..."
-    parec -d @DEFAULT_SOURCE@ --format=s16le --rate=16000 --channels=1 | lame --quiet -r --little-endian -s 16000 -m m --bitwidth 16 - "$AUDIO_FILE" &
-
-    # 记录进程ID
-    echo $! > "$PID_FILE"
+    parecord --latency-msec=10 --format=s16le --rate=16000 --channels=1 --file-format=wav $AUDIO_FILE &
+    echo $! > $PIDFILE
 fi
