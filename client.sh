@@ -8,7 +8,7 @@ PIDFILE="$TMP_DIR/pid"       # 录音文件路径
 NTF="$TMP_DIR/ntf"
 # whisper: m4a mp3 webm mp4 mpga wav mpeg
 # 创建缓存目录
--d "$TMP_DIR" || mkdir -p "$TMP_DIR"
+[ -d "$TMP_DIR" ] || mkdir -p "$TMP_DIR"
 
 # 检查是否正在录音
 if [ -f $PIDFILE ]; then
@@ -16,10 +16,15 @@ if [ -f $PIDFILE ]; then
     sleep 0.1; kill -SIGTERM $(cat $PIDFILE) ; rm $PIDFILE
     # 发送录音文件
     if [ -f "$AUDIO_FILE" ]; then
-	notify-send -r $(cat $NTF) "开始识别"
-        wtype $(curl -s -F "file=@$AUDIO_FILE" "$SERVER_URL" | jq -r '.text')
-#        rm "$AUDIO_FILE"
-	notify-send -r $(cat $NTF) -t 2000 "识别结束"
+        duration=$(printf "%.0f" $(ffprobe -i "$AUDIO_FILE" -show_entries format=duration -v quiet -of csv="p=0"))
+        if [ $duration -gt 1 ]; then
+            notify-send -r $(cat $NTF) "开始识别"
+            wtype $(curl -s -F "file=@$AUDIO_FILE" "$SERVER_URL" | jq -r '.text')
+            notify-send -r $(cat $NTF) -t 2000 "识别结束"
+        else
+            notify-send -r $(cat $NTF) -t 2000 "录音时间太短" "$duration"
+        fi
+        rm "$AUDIO_FILE"
     fi
 else
     notify-send -p "语音输入..." > $NTF
