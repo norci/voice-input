@@ -1,0 +1,126 @@
+# Ruff 配置文件
+# 基于 Python 3.11 标准
+
+# 目标版本
+target-version = "py311"
+
+# 行长度
+line-length = 100
+
+# 排除不检查的文件
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    "build",
+    "dist",
+    "*.egg-info",
+]
+
+[lint]
+# 忽略规则
+ignore = [
+    "N802",    # 忽略函数名小写警告
+    "N803",    # 忽略参数名小写警告
+    "C901",    # 忽略复杂函数警告
+    "RUF002",  # 忽略文档字符串中的歧义字符（中文标点）
+    "RUF001",  # 忽略中文字符中的歧义字符
+    "RUF003",  # 忽略注释中的歧义字符
+    "TRY400",  # 允许使用 logging.error 而不是 exception
+    "ARG002",  # 允许未使用的参数（回调函数需要）
+    "PLR2004", # 允许魔法值
+    "ANN401",  # 允许 Any 类型（GTK 需要）
+    "E402",    # 允许模块级导入在文件顶部之后（GTK 需要）
+    "PLR0911", # 允许函数有多个 return 语句（防误触发逻辑需要）
+    "PLR0913", # 允许函数参数过多（现有代码需要）
+    "ANN101",  # 忽略 self 类型注解（Python 3.11+ 不需要）
+    "ANN102",  # 忽略 cls 类型注解
+    "PLR0912", # 忽略分支过多警告（状态机逻辑需要）
+    "PLR0915", # 忽略语句过多警告（复杂功能需要）
+    "EM101",   # 允许异常消息使用字符串（中文消息需要）
+]
+
+# 选择规则
+select = [
+    "E",       # pycodestyle errors
+    "W",       # pycodestyle warnings
+    "F",       # pyflakes
+    "I",       # isort
+    "N",       # pep8-naming
+    "UP",      # pyupgrade
+    "ANN",     # flake8-annotations
+    "ASYNC",   # flake8-async
+    "B",       # flake8-bugbear
+    "A",       # flake8-builtins
+    "C4",      # flake8-comprehensions
+    "C90",     # mccabe complexity
+    "EM",      # flake8-errmsg
+    "FA",      # flake8-future-annotations
+    "PIE",     # flake8-pie
+    "T20",     # flake8-print
+    "PT",      # flake8-pytest-style
+    "RSE",     # flake8-raise
+    "RET",     # flake8-return
+    "SIM",     # flake8-simplify
+    "TID",     # flake8-tidy-imports
+    "ARG",     # flake8-unused-arguments
+    "PTH",     # flake8-use-pathlib
+    "PGH",     # pygrep-hooks
+    "PL",      # pylint
+    "TRY",     # tryceratops
+    "PERF",    # perflint
+    "RUF",     # Ruff 特定规则
+]
+
+# 修复规则
+fixable = ["ALL"]
+unfixable = []
+
+# 每个文件的特定规则忽略
+[lint.per-file-ignores]
+"tests/*" = [
+    "ANN",     # flake8-annotations
+    "S",       # bandit
+    "B",       # flake8-bugbear
+    "C4",      # flake8-comprehensions
+    "T20",     # flake8-print
+    "PLR",     # pylint
+    "ARG",     # flake8-unused-arguments
+    "PLW1510", # subprocess.run without check
+    "PTH",     # flake8-use-pathlib
+    "RUF",     # ambiguous characters
+    "PLC",     # pylint conventions (动态导入在测试中是合理的)
+    "N801",    # 测试类名可以包含 AC 标识
+    "SIM117",  # 允许嵌套 with（测试需要）
+    "F841",    # 允许未使用变量（测试占位）
+    "SIM105",  # 允许 try-except-pass
+    "SIM222",  # 允许 or True 模式
+    "TRY003",  # 允许长异常消息
+    "PGH003",  # 允许通用 type ignore
+]
+"__init__.py" = ["F401"]
+"main.py" = [
+    "ANN201",  # Missing return type annotation
+    "T201",    # print found
+]
+"examples/*" = [
+    "T201",    # print found
+    "F841",    # unused variable
+    "ARG001",  # unused argument
+    "ANN",     # flake8-annotations (示例文件不需要严格类型)
+    "PLR0915", # too many statements (示例需要展示完整流程)
+]
+# 特殊文件的规则忽略
+"src/voice_input/audio/vad.py" = ["UP038"]
+"src/voice_input/audio/__init__.py" = ["PLC"]  # 延迟导入避免循环依赖
+"src/voice_input/utils/error_handler.py" = ["PLW0603", "PLC"]  # global 在单例模式中需要；延迟导入避免循环依赖
+
+# isort 配置
+[lint.isort]
+known-first-party = ["voice_input"]
+
+# mccabe 复杂度配置
+[lint.mccabe]
+max-complexity = 10

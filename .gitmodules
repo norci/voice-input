@@ -1,0 +1,4 @@
+[submodule "FunASR"]
+	url = https://github.com/modelscope/FunASR
+	path = FunASR
+	branch = main

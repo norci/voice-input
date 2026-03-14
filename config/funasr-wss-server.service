@@ -1,0 +1,22 @@
+[Unit]
+Description=FunASR WebSocket Server
+Documentation=https://github.com/modelscope/FunASR
+After=network.target
+
+[Service]
+Type=simple
+User=%u
+WorkingDirectory=/home/josephx/code/voice-input
+ExecStart=/home/josephx/code/voice-input/scripts/funasr-wss-server.sh start
+ExecStop=/home/josephx/code/voice-input/scripts/funasr-wss-server.sh stop
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/tmp/funasr-wss-server.log
+StandardError=append:/tmp/funasr-wss-server.log
+
+# 环境变量
+Environment="PYTHONUNBUFFERED=1"
+
+[Install]
+WantedBy=default.target

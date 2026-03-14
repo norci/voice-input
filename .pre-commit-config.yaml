@@ -1,0 +1,60 @@
+# Pre-commit 配置文件
+
+# 仓库位置
+repos:
+  # Ruff - Python linter 和 formatter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.1.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # mypy - Python 类型检查
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        additional_dependencies:
+          - types-requests
+        args: [--strict, --ignore-missing-imports, --warn-unused-configs]
+        pass_filenames: false
+        entry: mypy src/
+
+  # 避免提交 secrets
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=10000']
+      - id: check-json
+      - id: check-toml
+      - id: debug-statements
+      - id: mixed-line-ending
+
+  # isort - import 排序 (ruff 已包含，但保留作为备份)
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: [--profile=black]
+
+# 默认最低版本
+default_language_version:
+  python: python3.11
+
+# 不自动修复的 hook
+fail_fast: false
+
+# 跳过某些文件的 hook
+exclude: |
+  (?x)(
+    \.git/
+    | \.venv/
+    | build/
+    | dist/
+    | \.egg-info/
+  )
