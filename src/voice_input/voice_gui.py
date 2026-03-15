@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""全功能紧凑 GUI 应用 - 包含录音、ASR 通信、显示、Socket 服务。
+"""全功能紧凑 GUI 应用 - 重构版本。
 
-这个模块实现了持续运行的单体 GUI 应用，包含所有功能：
-- Unix Socket 信号处理（开始/停止识别）
-- 录音和 ASR 通信
-- 实时显示中间结果和最终结果
-- 使用 GTK4 窗口，由 Hyprland 管理窗口位置
+重构后的代码结构：
+1. 分离职责：UI、录音、ASR 通信、文本注入
+2. 简化回调结构
+3. 清晰的状态管理
 """
 
 import asyncio
@@ -16,7 +15,7 @@ import queue
 import socket
 import subprocess
 import threading
-import time
+from collections.abc import Callable
 from pathlib import Path
 
 import gi
@@ -25,8 +24,6 @@ gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk", "4.0")
 
 import contextlib
-
-# 导入现有模块
 from dataclasses import dataclass
 
 from gi.repository import GLib, Gtk
@@ -34,7 +31,6 @@ from gi.repository import GLib, Gtk
 from voice_input.asr_client import AsrClient, AsrClientConfig, ResultType
 from voice_input.config_loader import Config, load_config
 
-# 当前模块的logger（用于文件中logger.info()等调用）
 logger = logging.getLogger(__name__)
 
 
@@ -50,18 +46,197 @@ class ErrorEvent:
     timestamp: float
 
 
+@dataclass
+class RecognitionResult:
+    """识别结果。"""
+
+    text: str
+    result_type: ResultType
+
+
 # ============================================================================
-# 应用状态数据类
+# 文本注入器
 # ============================================================================
-class AppState:
-    """应用状态。"""
+class TextInjector:
+    """文本注入器 - 负责将文本插入到光标位置。"""
 
-    is_recording: bool = False
-    current_text: str = ""
-    interim_text: str = ""
-    final_text: str = ""
+    def __init__(self) -> None:
+        """初始化文本注入器。"""
+        self._lock = threading.Lock()
+        self._last_injected_text = ""
+
+    def inject(self, text: str) -> bool:
+        """将文本插入到光标位置。
+
+        Args:
+            text: 要插入的文本
+
+        Returns:
+            是否插入成功
+        """
+        # 验证文本
+        if not text or not isinstance(text, str) or not text.strip():
+            logger.warning(f"跳过无效文本注入: {text!r}")
+            return False
+
+        # 避免重复注入相同文本
+        if text == self._last_injected_text:
+            logger.debug(f"跳过重复文本注入: {text}")
+            return False
+
+        # 使用锁防止并发注入
+        with self._lock:
+            try:
+                result = subprocess.run(
+                    ["wtype", text],
+                    capture_output=True,
+                    text=True,
+                    timeout=2,
+                    check=False,
+                )
+            except FileNotFoundError:
+                logger.error("wtype 命令未找到，请安装 wtype")
+                return False
+            except Exception as e:
+                logger.error(f"文本注入错误: {e}")
+                return False
+            else:
+                if result.returncode == 0:
+                    self._last_injected_text = text
+                    logger.info(f"文本注入成功: {text}")
+                    return True
+                logger.error(f"文本注入失败: {result.stderr}")
+                return False
 
 
+# ============================================================================
+# 语音识别管理器
+# ============================================================================
+class RecognitionManager:
+    """语音识别管理器 - 负责管理语音识别流程。"""
+
+    def __init__(
+        self,
+        asr_client: AsrClient,
+        on_result_callback: Callable[[str, ResultType], None],
+        on_error_callback: Callable[[str, str], None] | None = None,
+    ) -> None:
+        """初始化语音识别管理器。
+
+        Args:
+            asr_client: ASR 客户端
+            on_result_callback: 结果回调函数
+            on_error_callback: 错误回调函数
+        """
+        self._asr_client = asr_client
+        self._on_result_callback = on_result_callback
+        self._on_error_callback = on_error_callback
+        self._stop_event = asyncio.Event()
+        self._task: asyncio.Task[str] | None = None
+
+    async def start_recognition(self) -> str:
+        """开始语音识别。
+
+        Returns:
+            最终识别结果
+        """
+        self._stop_event.clear()
+
+        async def on_result(text: str, result_type: ResultType) -> None:
+            """处理识别结果回调。"""
+            logger.info(f"收到识别结果: {text} ({result_type.value})")
+
+            # 验证文本内容
+            if not text or not isinstance(text, str):
+                logger.warning(f"收到无效的识别结果: {text!r}")
+                return
+
+            # 调用外部回调
+            self._on_result_callback(text, result_type)
+
+        try:
+            logger.info("开始语音识别...")
+            final_text: str = await self._asr_client.recognize_with_stop(
+                stop_event=self._stop_event,
+                on_result=on_result,
+            )
+            logger.info(f"识别完成: {final_text}")
+        except Exception as e:
+            logger.error(f"录音启动失败: {e}")
+            if self._on_error_callback:
+                self._on_error_callback("RECORDING_START_FAILED", str(e))
+            return ""
+        else:
+            return final_text
+
+    def stop_recognition(self) -> None:
+        """停止语音识别。"""
+        logger.info("停止语音识别")
+        self._stop_event.set()
+
+
+# ============================================================================
+# UI 管理器
+# ============================================================================
+class UIManager:
+    """UI 管理器 - 负责管理 GUI 界面。"""
+
+    def __init__(self, window: "VoiceGUIWindow") -> None:
+        """初始化 UI 管理器。
+
+        Args:
+            window: GUI 窗口
+        """
+        self._window = window
+        self._result_label = window._result_label
+        self._status_indicator = window._status_indicator
+        self._toggle_button = window._toggle_button
+
+    def update_status(self, is_recording: bool) -> None:
+        """更新录音状态。
+
+        Args:
+            is_recording: 是否正在录音
+        """
+        color = "#00FF00" if is_recording else "#808080"
+        label = "停止识别" if is_recording else "开始识别"
+
+        GLib.idle_add(self._update_status_color, color)
+        GLib.idle_add(self._toggle_button.set_label, label)
+
+    def update_result_display(self, text: str) -> None:
+        """更新结果显示。
+
+        Args:
+            text: 要显示的文本
+        """
+        GLib.idle_add(self._result_label.set_label, text)
+
+    def clear_result_display(self) -> None:
+        """清空结果显示。"""
+        GLib.idle_add(self._result_label.set_label, "")
+
+    def _update_status_color(self, color: str) -> bool:
+        """更新状态指示器颜色。
+
+        Args:
+            color: 十六进制颜色值
+
+        Returns:
+            False 表示单次执行
+        """
+        css_provider = Gtk.CssProvider()
+        css = f"box {{ background-color: {color}; }}"
+        css_provider.load_from_string(css)
+        self._status_indicator.get_style_context().add_provider(
+            css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+        return False
+
+
+# ============================================================================
+# GUI 窗口
+# ============================================================================
 class VoiceGUIWindow(Gtk.ApplicationWindow):
     """全功能紧凑 GUI 窗口。"""
 
@@ -70,10 +245,11 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
         super().__init__(application=app, title="Voice Input")
 
         self._config = config
-        self._state = AppState()
         self._asr_client: AsrClient | None = None
-        self._error_count = 0
-        self._recording_task: asyncio.Task[None] | None = None
+        self._recognition_manager: RecognitionManager | None = None
+        self._ui_manager: UIManager
+        self._is_recording = False
+        self._text_injector: TextInjector = TextInjector()
 
         # 窗口配置
         self.set_default_size(200, 100)
@@ -110,7 +286,6 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
         self._status_indicator = Gtk.Box()
         self._status_indicator.set_size_request(20, 20)
         top_row.append(self._status_indicator)
-        self._update_status_color("#808080")
 
         # 开始/停止按钮（左对齐）
         self._toggle_button = Gtk.Button(label="开始识别")
@@ -130,135 +305,22 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
         self._result_label.set_max_width_chars(40)
         main_box.append(self._result_label)
 
+        # 初始化 UI 管理器
+        self._ui_manager = UIManager(self)
+
     def _init_asr_client(self) -> None:
         """初始化 ASR 客户端。"""
         try:
             asr_config = AsrClientConfig.from_config(self._config)
-            # 创建 ASR 客户端（新的简化 API 只需要 config）
             self._asr_client = AsrClient(asr_config)
-
             logger.info("ASR 客户端已初始化")
         except Exception as e:
             logger.error(f"初始化 ASR 客户端失败: {e}")
 
-    def _update_status_color(self, color: str) -> None:
-        """更新状态指示器颜色。
-
-        Args:
-            color: 十六进制颜色值，如 "#808080" 或 "#00FF00"
-        """
-        css_provider = Gtk.CssProvider()
-        css = f"box {{ background-color: {color}; }}"
-        css_provider.load_from_string(css)
-        self._status_indicator.get_style_context().add_provider(
-            css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-        )
-
-    def _handle_error_event(self, error_event: ErrorEvent) -> None:
-        """处理错误事件的共享逻辑.
-
-        Args:
-            error_event: 要处理的错误事件
-        """
-        logger.info(f"发送错误事件: {error_event.error_type} - {error_event.message}")
-
-        # 更新错误计数
-        self._error_count += 1
-
-        # 在主线程中更新 UI 显示错误信息
-        self._display_error_message(error_event)
-
-    def _send_error_event_async(self, error_type: str, error_message: str) -> None:
-        """异步发送错误事件（从非主线程调用）。
-
-        Args:
-            error_type: 错误类型
-            error_message: 错误消息
-        """
-        # 创建错误事件
-        error_event = ErrorEvent(
-            error_type=error_type, message=error_message, timestamp=time.time()
-        )
-
-        # 使用 GLib.idle_add 在主线程中处理事件
-        GLib.idle_add(self._handle_error_event, error_event)
-
-    def _display_error_message(self, error_event: ErrorEvent) -> None:
-        """显示错误信息到 GUI。
-
-        Args:
-            error_event: 错误事件
-        """
-        error_message = f"错误: {error_event.error_type} - {error_event.message}"
-        logger.error(error_message)
-
-        # 更新状态指示器颜色（错误用红色）
-        self._update_status_color("#FF0000")
-
-        # 显示错误信息到结果标签
-        self._result_label.set_label(f"错误: {error_event.message}")
-
-        # 短暂显示后清空
-        GLib.timeout_add(3000, self._clear_error_display)
-
-    def _clear_error_display(self) -> bool:
-        """清空错误显示（用于短暂显示后）。"""
-        self._update_status_color("#808080")  # 恢复灰色
-        self._result_label.set_label("")
-        return False  # 单次执行
-
-    def _update_interim_text(self, text: str) -> bool:
-        """更新中间结果显示（在主线程中调用）。"""
-        self._state.interim_text = text
-        self._result_label.set_label(text)
-        logger.debug(f"更新中间结果: {text}")
-        return False  # 单次执行
-
-    def _update_final_text(self, text: str) -> bool:
-        """更新最终结果显示（在主线程中调用）。
-
-        显示最终识别结果到 GUI 界面，并注入到光标位置。
-        """
-        self._state.final_text = text
-        self._result_label.set_label(text)
-        logger.info(f"最终结果: {text}")
-
-        # 注入文本到光标位置
-        self._inject_text(text)
-
-        # 短暂显示后清空
-        GLib.timeout_add(2000, self._clear_result_display)
-
-        return False  # 单次执行
-
-    def _inject_text(self, text: str) -> bool:
-        """使用 wtype 将文本注入到光标位置。"""
-        try:
-            result = subprocess.run(
-                ["wtype", text], capture_output=True, text=True, timeout=2, check=False
-            )
-        except FileNotFoundError:
-            logger.error("wtype 命令未找到，请安装 wtype")
-            return False
-        except Exception as e:
-            logger.error(f"文本注入错误: {e}")
-            return False
-        else:
-            if result.returncode == 0:
-                logger.info(f"文本注入成功: {text}")
-                return False  # 返回 False 让 GLib.idle_add 只执行一次
-            logger.error(f"文本注入失败: {result.stderr}")
-            return False
-
-    def _clear_result_display(self) -> bool:
-        """清空结果显示（用于短暂显示后）。"""
-        self._result_label.set_label("")
-        return False  # 单次执行
-
     def _on_toggle_clicked(self, button: Gtk.Button) -> None:
         """切换按钮点击事件。"""
-        logger.info(f"切换按钮点击，当前录音状态: {self._state.is_recording}")
-        if self._state.is_recording:
+        logger.info(f"切换按钮点击，当前录音状态: {self._is_recording}")
+        if self._is_recording:
             self.stop_recording()
         else:
             self.start_recording()
@@ -268,114 +330,92 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
         self.quit_app()
 
     def is_recording(self) -> bool:
-        """Check if currently recording (public method for external access)."""
-        return self._state.is_recording
+        """Check if currently recording."""
+        return self._is_recording
 
     def start_recording(self) -> None:
         """开始录音。"""
         if self._asr_client is None:
             error_msg = "ASR 客户端未初始化"
             logger.error(error_msg)
-            self._send_error_event_async("ASR_CLIENT_NOT_INITIALIZED", error_msg)
             return
 
+        # 更新 UI 状态
+        self._is_recording = True
+        self._ui_manager.update_status(True)
+
+        # 创建语音识别管理器
+        self._recognition_manager = RecognitionManager(
+            asr_client=self._asr_client,
+            on_result_callback=self._on_recognition_result,
+            on_error_callback=self._on_recognition_error,
+        )
+
         # 在新线程中运行异步任务
-        thread = threading.Thread(target=self._run_async_recording, daemon=True)
+        thread = threading.Thread(target=self._run_async_recognition, daemon=True)
         thread.start()
 
-        # 更新 UI 状态（在主线程中）
-        self._state.is_recording = True
-        GLib.idle_add(self._update_status_color, "#00FF00")  # 绿色
-        GLib.idle_add(self._toggle_button.set_label, "停止识别")
         logger.info("开始录音")
 
-    def _run_async_recording(self) -> None:
-        """在线程中运行异步录音任务。"""
+    def _run_async_recognition(self) -> None:
+        """在线程中运行异步识别任务。"""
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
-            self._recording_task = loop.create_task(self._start_recording_async())
-            loop.run_until_complete(self._recording_task)
+            if self._recognition_manager:
+                loop.run_until_complete(self._recognition_manager.start_recognition())
         except Exception as e:
-            logger.error(f"录音任务错误: {e}", exc_info=True)
+            logger.error(f"识别任务错误: {e}", exc_info=True)
         finally:
             loop.close()
+            # 识别完成后更新 UI
+            GLib.idle_add(self._on_recognition_complete)
 
-    async def _start_recording_async(self) -> None:
-        """异步开始录音的协程。"""
-        if self._asr_client is None:
-            error_msg = "ASR 客户端未初始化"
-            logger.error(error_msg)
-            self._send_error_event_async("ASR_CLIENT_NOT_INITIALIZED", error_msg)
-            return
+    def _on_recognition_result(self, text: str, result_type: ResultType) -> None:
+        """处理识别结果。
 
-        # 用于跟踪上一次注入的 final 结果，避免重复注入相同内容
-        last_injected_text = ""
+        Args:
+            text: 识别文本
+            result_type: 结果类型
+        """
+        # 更新结果显示
+        self._ui_manager.update_result_display(text)
 
-        async def on_result(text: str, result_type: ResultType) -> None:
-            """处理识别结果回调。"""
-            nonlocal last_injected_text
-            logger.info(f"收到识别结果: {text} ({result_type.value})")
-            # 使用 GLib.idle_add 在主线程中更新 UI
-            if result_type == ResultType.INTERIM:
-                self._state.interim_text = text
-                GLib.idle_add(self._result_label.set_label, text)
-            elif result_type == ResultType.FINAL:
-                self._state.final_text = text
-                GLib.idle_add(self._result_label.set_label, text)
-                logger.info(f"已更新结果显示为: {text}")
-                # 注入文本到光标位置（每个新的 final 结果都注入）
-                if text != last_injected_text:
-                    last_injected_text = text
-                    GLib.idle_add(self._inject_text, text)
+        # 如果是最终结果，注入文本
+        if result_type == ResultType.FINAL:
+            logger.info(f"最终结果: {text}")
+            GLib.idle_add(self._text_injector.inject, text)
 
-        try:
-            logger.info("开始语音识别...")
-            # stop_event 由 AsrClient 内部管理
-            final_text = await self._asr_client.recognize_with_stop(
-                on_result=on_result,
-            )
+    def _on_recognition_error(self, error_type: str, message: str) -> None:
+        """处理识别错误。
 
-            # 保存最终结果
-            if final_text:
-                self._state.final_text = final_text
-                GLib.idle_add(self._result_label.set_label, final_text)
-                logger.info(f"识别完成后更新结果显示: {final_text}")
+        Args:
+            error_type: 错误类型
+            message: 错误消息
+        """
+        logger.error(f"识别错误: {error_type} - {message}")
+        # 可以在这里添加错误显示逻辑
 
-            logger.info(f"识别完成: {final_text}")
-        except Exception as e:
-            logger.error(f"录音启动失败: {e}")
-            self._send_error_event_async("RECORDING_START_FAILED", str(e))
-        finally:
-            # 更新 UI 状态
-            self._state.is_recording = False
-            logger.info("finally block: setting is_recording to False")
-            GLib.idle_add(self._update_status_color, "#808080")  # 灰色
-            GLib.idle_add(self._toggle_button.set_label, "开始识别")
+    def _on_recognition_complete(self) -> bool:
+        """识别完成回调。"""
+        # 更新 UI 状态
+        self._is_recording = False
+        self._ui_manager.update_status(False)
 
-            # 清空识别结果（在识别任务结束后执行）
-            logger.info("finally block: clearing result display...")
-            GLib.idle_add(self._result_label.set_label, "")
-            self._state.interim_text = ""
-            self._state.final_text = ""
-            logger.info("finally block: result display cleared")
+        # 短暂显示后清空结果
+        GLib.timeout_add(2000, self._ui_manager.clear_result_display)
+
+        return False  # 单次执行
 
     def stop_recording(self) -> None:
-        """停止录音。
+        """停止录音。"""
+        logger.info("停止录音")
 
-        调用 AsrClient.stop() 停止识别，所有异步细节由 AsrClient 内部处理。
-        """
-        logger.info("stop_recording called, is_recording: %s", self._state.is_recording)
+        if self._recognition_manager:
+            self._recognition_manager.stop_recognition()
 
-        if self._asr_client:
-            self._asr_client.stop()
-            logger.info("已通知 AsrClient 停止")
-
-        self._state.is_recording = False
-        # 使用 GLib.idle_add 确保在主线程更新 UI
-        GLib.idle_add(self._update_status_color, "#808080")  # 灰色
-        GLib.idle_add(self._toggle_button.set_label, "开始识别")
-        logger.info("停止录音完成（等待识别任务结束以清空结果显示）")
+        self._is_recording = False
+        self._ui_manager.update_status(False)
 
     def _on_close(self, _widget: Gtk.Window) -> None:
         """处理窗口关闭事件。"""
@@ -387,17 +427,17 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
         logger.info("正在退出应用...")
 
         # 如果仍在录音，优雅停止
-        if self._state.is_recording:
+        if self._is_recording:
             self.stop_recording()
 
-        # 注意：异步任务会在 WebSocket 关闭后自然退出
-        # 录音线程是 daemon 线程，进程退出时自动终止
         logger.info("关闭 GUI 窗口")
-
         if self.get_application():
             self.get_application().quit()
 
 
+# ============================================================================
+# 应用程序
+# ============================================================================
 class VoiceGUIApplication(Gtk.Application):
     """全功能紧凑 GUI 应用程序。"""
 
@@ -406,6 +446,7 @@ class VoiceGUIApplication(Gtk.Application):
         super().__init__(application_id="com.voiceinput.gui", flags=0)
         self._config = config
         self._window: VoiceGUIWindow | None = None
+
         # 使用 XDG_RUNTIME_DIR（必须存在）
         runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
         if not runtime_dir or not Path(runtime_dir).is_dir():
@@ -414,7 +455,6 @@ class VoiceGUIApplication(Gtk.Application):
         self._socket_path = f"{runtime_dir}/voice-input.sock"
         self._socket_server_running = threading.Event()
         self._socket_thread: threading.Thread | None = None
-        # Queue for callbacks to communicate with GTK main thread
         self._action_queue: queue.Queue[str] = queue.Queue()
 
     def do_activate(self) -> None:
@@ -542,34 +582,17 @@ class VoiceGUIApplication(Gtk.Application):
             self._socket_thread = None
         logger.info("Socket 服务已停止")
 
-    def _on_socket_toggle(self) -> None:
-        """Socket 切换回调（在 GTK 主线程中运行）。"""
-        logger.info("Socket Toggle callback triggered")
-        # 把操作放入队列，由 GTK 主线程处理
-        try:
-            self._action_queue.put("toggle")
-            logger.info("Action queued successfully")
-        except Exception as e:
-            logger.error(f"Failed to queue action: {e}")
-
-    def _on_socket_quit(self) -> None:
-        """Socket 退出回调。"""
-        # 先停止 Socket 服务
-        self._stop_socket_server()
-        if self._window:
-            self._window.quit_app()
-
 
 def main() -> None:
     """主函数。"""
-    # 配置日志输出到文件（配置根logger以捕获所有子模块的日志）
+    # 配置日志输出到文件
     log_file = "/tmp/voice_gui.log"
     file_handler = logging.FileHandler(log_file, mode="w", encoding="utf-8")
     file_handler.setLevel(logging.DEBUG)
     formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     file_handler.setFormatter(formatter)
 
-    # 配置根logger，通过Python日志传播机制自动捕获所有子模块日志
+    # 配置根logger
     logging.getLogger().addHandler(file_handler)
     logging.getLogger().setLevel(logging.DEBUG)
 

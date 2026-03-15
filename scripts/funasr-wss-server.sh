@@ -14,7 +14,7 @@ LOG_FILE="/tmp/funasr-wss-server.log"
 # 默认参数
 HOST="127.0.0.1"
 PORT="10095"
-NGPU="1"
+NGPU="0"
 
 # 解析命令行参数
 ACTION="$1"
