@@ -24,7 +24,6 @@ gi.require_version("Gdk", "4.0")
 gi.require_version("Gtk", "4.0")
 
 import contextlib
-from dataclasses import dataclass
 
 from gi.repository import GLib, Gtk
 
@@ -35,77 +34,37 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================================
-# 数据类
-# ============================================================================
-@dataclass
-class ErrorEvent:
-    """错误事件。"""
-
-    error_type: str
-    message: str
-    timestamp: float
-
-
-@dataclass
-class RecognitionResult:
-    """识别结果。"""
-
-    text: str
-    result_type: ResultType
-
-
-# ============================================================================
 # 文本注入器
 # ============================================================================
 class TextInjector:
     """文本注入器 - 负责将文本插入到光标位置。"""
 
     def __init__(self) -> None:
-        """初始化文本注入器。"""
         self._lock = threading.Lock()
         self._last_injected_text = ""
 
     def inject(self, text: str) -> bool:
-        """将文本插入到光标位置。
-
-        Args:
-            text: 要插入的文本
-
-        Returns:
-            是否插入成功
-        """
-        # 验证文本
         if not text or not isinstance(text, str) or not text.strip():
-            logger.warning(f"跳过无效文本注入: {text!r}")
             return False
 
-        # 避免重复注入相同文本
         if text == self._last_injected_text:
-            logger.debug(f"跳过重复文本注入: {text}")
             return False
 
-        # 使用锁防止并发注入
         with self._lock:
             try:
                 result = subprocess.run(
-                    ["wtype", text],
+                    ["wtype", f"{text}"],
                     capture_output=True,
                     text=True,
                     timeout=2,
                     check=False,
                 )
-            except FileNotFoundError:
-                logger.error("wtype 命令未找到，请安装 wtype")
-                return False
-            except Exception as e:
-                logger.error(f"文本注入错误: {e}")
+            except Exception:
                 return False
             else:
                 if result.returncode == 0:
                     self._last_injected_text = text
-                    logger.info(f"文本注入成功: {text}")
                     return True
-                logger.error(f"文本注入失败: {result.stderr}")
                 return False
 
 
@@ -135,36 +94,21 @@ class RecognitionManager:
         self._task: asyncio.Task[str] | None = None
 
     async def start_recognition(self) -> str:
-        """开始语音识别。
-
-        Returns:
-            最终识别结果
-        """
+        """开始语音识别。"""
         self._stop_event.clear()
 
         async def on_result(text: str, result_type: ResultType) -> None:
-            """处理识别结果回调。"""
-            logger.info(f"收到识别结果: {text} ({result_type.value})")
-
-            # 验证文本内容
             if not text or not isinstance(text, str):
-                logger.warning(f"收到无效的识别结果: {text!r}")
                 return
-
-            # 调用外部回调
             self._on_result_callback(text, result_type)
 
         try:
-            logger.info("开始语音识别...")
             final_text: str = await self._asr_client.recognize_with_stop(
                 stop_event=self._stop_event,
                 on_result=on_result,
             )
-            logger.info(f"识别完成: {final_text}")
         except Exception as e:
-            logger.error(f"录音启动失败: {e}", exc_info=True)
             if self._on_error_callback:
-                logger.info("调用错误回调")
                 self._on_error_callback("RECORDING_START_FAILED", str(e))
             return ""
         else:
@@ -172,7 +116,6 @@ class RecognitionManager:
 
     def stop_recognition(self) -> None:
         """停止语音识别。"""
-        logger.info("停止语音识别")
         self._stop_event.set()
 
 
@@ -211,7 +154,7 @@ class UIManager:
         Args:
             text: 要显示的文本
         """
-        GLib.idle_add(self._result_label.set_label, text)
+        self._result_label.set_label(text)
 
     def clear_result_display(self) -> None:
         """清空结果显示。"""
@@ -320,15 +263,10 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
 
     def _on_toggle_clicked(self, button: Gtk.Button) -> None:
         """切换按钮点击事件。"""
-        logger.info(f"切换按钮点击，当前录音状态: {self._is_recording}")
-        logger.info(f"按钮当前标签: {button.get_label()}")
         if self._is_recording:
-            logger.info("调用 stop_recording")
             self.stop_recording()
         else:
-            logger.info("调用 start_recording")
             self.start_recording()
-        logger.info(f"录音状态更新为: {self._is_recording}")
 
     def _on_quit_clicked(self, button: Gtk.Button) -> None:
         """退出按钮点击事件。"""
@@ -341,27 +279,19 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
     def start_recording(self) -> None:
         """开始录音。"""
         if self._asr_client is None:
-            error_msg = "ASR 客户端未初始化"
-            logger.error(error_msg)
             return
 
-        # 更新 UI 状态
         self._is_recording = True
         self._ui_manager.update_status(True)
-        logger.info(f"开始录音，设置 _is_recording = {self._is_recording}")
 
-        # 创建语音识别管理器
         self._recognition_manager = RecognitionManager(
             asr_client=self._asr_client,
             on_result_callback=self._on_recognition_result,
             on_error_callback=self._on_recognition_error,
         )
 
-        # 在新线程中运行异步任务
         thread = threading.Thread(target=self._run_async_recognition, daemon=True)
         thread.start()
-
-        logger.info("开始录音")
 
     def _run_async_recognition(self) -> None:
         """在线程中运行异步识别任务。"""
@@ -370,11 +300,10 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
         try:
             if self._recognition_manager:
                 loop.run_until_complete(self._recognition_manager.start_recognition())
-        except Exception as e:
-            logger.error(f"识别任务错误: {e}", exc_info=True)
+        except Exception:
+            pass
         finally:
             loop.close()
-            # 识别完成后更新 UI
             GLib.idle_add(self._on_recognition_complete)
 
     def _on_recognition_result(self, text: str, result_type: ResultType) -> None:
@@ -384,43 +313,26 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
             text: 识别文本
             result_type: 结果类型
         """
-        # 更新结果显示
+        # 显示所有结果
         self._ui_manager.update_result_display(text)
 
         # 如果是最终结果，注入文本
         if result_type == ResultType.FINAL:
-            logger.info(f"最终结果: {text}")
             GLib.idle_add(self._text_injector.inject, text)
 
     def _on_recognition_error(self, error_type: str, message: str) -> None:
-        """处理识别错误。
-
-        Args:
-            error_type: 错误类型
-            message: 错误消息
-        """
-        logger.error(f"识别错误: {error_type} - {message}")
-        # 显示错误消息给用户
-        error_message = f"错误: {message}"
-        logger.info(f"安排显示错误消息: {error_message}")
-        GLib.idle_add(self._ui_manager.update_result_display, error_message)
+        """处理识别错误。"""
+        GLib.idle_add(self._ui_manager.update_result_display, f"错误: {message}")
 
     def _on_recognition_complete(self) -> bool:
         """识别完成回调。"""
-        # 更新 UI 状态
-        logger.info(f"识别完成，设置 _is_recording = False (当前值: {self._is_recording})")
         self._is_recording = False
         self._ui_manager.update_status(False)
-
-        # 短暂显示后清空结果
-        GLib.timeout_add(2000, self._ui_manager.clear_result_display)
-
-        return False  # 单次执行
+        self._ui_manager.clear_result_display()
+        return False
 
     def stop_recording(self) -> None:
         """停止录音。"""
-        logger.info("停止录音")
-
         if self._recognition_manager:
             self._recognition_manager.stop_recognition()
 
@@ -429,18 +341,13 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
 
     def _on_close(self, _widget: Gtk.Window) -> None:
         """处理窗口关闭事件。"""
-        logger.info("GUI 窗口关闭")
         self.quit()
 
     def quit_app(self) -> None:
         """退出应用。"""
-        logger.info("正在退出应用...")
-
-        # 如果仍在录音，优雅停止
         if self._is_recording:
             self.stop_recording()
 
-        logger.info("关闭 GUI 窗口")
         if self.get_application():
             self.get_application().quit()
 

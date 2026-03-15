@@ -93,7 +93,6 @@ class AsrClient:
         self._ws: websockets.ClientConnection | None = None
         self._event_loop: asyncio.AbstractEventLoop | None = None
         self._stop_event: asyncio.Event | None = None
-        logger.info(f"ASR 客户端已初始化 (服务: {config.host}:{config.port})")
 
     async def recognize_with_stop(
         self,
@@ -177,10 +176,8 @@ class AsrClient:
                         last_final_text = text
                         result_type = ResultType.FINAL
                         final_text = text
-                        logger.info(f"最终结果: {text}")
                     else:
                         result_type = ResultType.INTERIM
-                        logger.debug(f"中间结果: {text}")
 
                     if on_result:
                         await on_result(text, result_type)
@@ -188,16 +185,13 @@ class AsrClient:
             except websockets.exceptions.ConnectionClosed:
                 pass
 
-        logger.info(f"准备连接到 ASR 服务器: {uri}")
         try:
-            logger.info(f"正在连接到 ASR 服务器: {uri}")
             ws = await websockets.connect(
                 uri,
                 subprotocols=[websockets.Subprotocol("binary")],
                 ping_interval=None,
                 ssl=ssl_context,
             )
-            logger.info("WebSocket 连接已建立")
 
             try:
                 # 保存引用，供主线程跨线程关闭连接
@@ -212,7 +206,6 @@ class AsrClient:
                     "is_speaking": True,
                 }
                 await ws.send(json.dumps(init_msg))
-                logger.info("已建立连接，开始识别...")
 
                 # 并发执行发送和接收
                 # 连接关闭时两个子任务都捕获 ConnectionClosed 并正常返回
@@ -226,18 +219,13 @@ class AsrClient:
                 if ws is not None:
                     with suppress(Exception):
                         await ws.close()
-        except (OSError, ConnectionRefusedError) as e:
-            logger.error(f"ASR 服务器连接失败 (OSError): {e}", exc_info=True)
+        except (OSError, ConnectionRefusedError):
             raise
 
         except websockets.exceptions.ConnectionClosed:
-            # 连接被关闭（停止时触发），正常退出
-            logger.info("WebSocket 连接已关闭")
             return final_text
 
-        except Exception as e:
-            logger.error(f"识别异常: {e}", exc_info=True)
-            # 重新抛出异常，让调用者能够处理错误
+        except Exception:
             raise
 
     def stop(self) -> None:
