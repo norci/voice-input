@@ -7,15 +7,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 SERVICE_NAME="voice-input.service"
+FUNASR_SERVICE_NAME="funasr-wss-server.service"
 SYSTEMD_USER_DIR="${HOME}/.config/systemd/user"
 SERVICE_FILE="${SYSTEMD_USER_DIR}/${SERVICE_NAME}"
+FUNASR_SERVICE_FILE="${SYSTEMD_USER_DIR}/${FUNASR_SERVICE_NAME}"
 
 usage() {
     echo "Usage: $0 {install|uninstall}"
     echo ""
     echo "Commands:"
-    echo "  install    Install and enable the voice-input systemd user service"
-    echo "  uninstall  Stop, disable and remove the voice-input systemd user service"
+    echo "  install    Install and enable the voice-input and funasr-wss-server systemd user services"
+    echo "  uninstall  Stop, disable and remove the voice-input and funasr-wss-server systemd user services"
     exit 1
 }
 
@@ -62,12 +64,12 @@ do_install() {
     # Create systemd user directory if it doesn't exist
     mkdir -p "${SYSTEMD_USER_DIR}"
 
-    # Create the service file
+    # Create the voice-input service file
     cat > "${SERVICE_FILE}" << EOF
 [Unit]
 Description=Voice Input - Chinese Voice Input Method based on FunASR
-After=graphical-session.target
-Wants=graphical-session.target
+After=graphical-session.target funasr-wss-server.service
+Wants=graphical-session.target funasr-wss-server.service
 PartOf=graphical-session.target
 
 [Service]
@@ -83,11 +85,37 @@ EOF
 
     echo "Service file created at: ${SERVICE_FILE}"
 
+    # Create the funasr-wss-server service file
+    # Directly execute uv run instead of using the shell script
+    cat > "${FUNASR_SERVICE_FILE}" << EOF
+[Unit]
+Description=FunASR WebSocket Server
+Documentation=https://github.com/modelscope/FunASR
+After=network.target graphical-session.target
+Wants=graphical-session.target
+
+[Service]
+Type=simple
+User=%u
+WorkingDirectory=${PROJECT_PATH}
+ExecStart=${UV_EXEC} --directory ${PROJECT_PATH}/FunASR/runtime/python/websocket run funasr_wss_server.py --host 127.0.0.1 --port 10095
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target
+EOF
+
+    echo "FunASR service file created at: ${FUNASR_SERVICE_FILE}"
+
     # Reload systemd user daemon
     systemctl --user daemon-reload
 
-    # Enable the service to start with graphical session
+    # Enable the voice-input service to start with graphical session
     systemctl --user enable "${SERVICE_NAME}"
+
+    # Enable the funasr-wss-server service
+    systemctl --user enable "${FUNASR_SERVICE_NAME}"
 
     echo ""
     echo "Installation complete!"
@@ -108,13 +136,21 @@ EOF
     echo "  systemctl --user disable ${SERVICE_NAME}"
     echo ""
 
-    # Ask if user wants to start the service now
-    read -p "Start the service now? [y/N] " -n 1 -r
+    # Ask if user wants to start the services now
+    read -p "Start the services now? [y/N] " -n 1 -r
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        systemctl --user start "${SERVICE_NAME}"
-        echo "Service started. Checking status..."
+        echo "Starting funasr-wss-server service..."
+        systemctl --user start "${FUNASR_SERVICE_NAME}"
         sleep 2
+        echo "Starting voice-input service..."
+        systemctl --user start "${SERVICE_NAME}"
+        echo "Services started. Checking status..."
+        sleep 2
+        echo "FunASR service status:"
+        systemctl --user status "${FUNASR_SERVICE_NAME}" --no-pager
+        echo ""
+        echo "Voice-input service status:"
         systemctl --user status "${SERVICE_NAME}" --no-pager
     fi
 }
@@ -122,35 +158,56 @@ EOF
 do_uninstall() {
     echo "Uninstalling voice-input systemd user service..."
 
-    # Check if service is installed
+    # Check if voice-input service is installed
     if [[ ! -f "${SERVICE_FILE}" ]]; then
         echo "Service file not found at: ${SERVICE_FILE}"
         echo "Service may not be installed or already removed."
-        exit 0
+    else
+        # Stop the service if it's running
+        if systemctl --user is-active "${SERVICE_NAME}" &> /dev/null; then
+            echo "Stopping voice-input service..."
+            systemctl --user stop "${SERVICE_NAME}"
+        fi
+
+        # Disable the service
+        if systemctl --user is-enabled "${SERVICE_NAME}" &> /dev/null; then
+            echo "Disabling voice-input service..."
+            systemctl --user disable "${SERVICE_NAME}"
+        fi
+
+        # Remove the service file
+        echo "Removing voice-input service file..."
+        rm -f "${SERVICE_FILE}"
     fi
 
-    # Stop the service if it's running
-    if systemctl --user is-active "${SERVICE_NAME}" &> /dev/null; then
-        echo "Stopping service..."
-        systemctl --user stop "${SERVICE_NAME}"
-    fi
+    # Check if funasr-wss-server service is installed
+    if [[ ! -f "${FUNASR_SERVICE_FILE}" ]]; then
+        echo "FunASR service file not found at: ${FUNASR_SERVICE_FILE}"
+        echo "FunASR service may not be installed or already removed."
+    else
+        # Stop the funasr service if it's running
+        if systemctl --user is-active "${FUNASR_SERVICE_NAME}" &> /dev/null; then
+            echo "Stopping funasr-wss-server service..."
+            systemctl --user stop "${FUNASR_SERVICE_NAME}"
+        fi
 
-    # Disable the service
-    if systemctl --user is-enabled "${SERVICE_NAME}" &> /dev/null; then
-        echo "Disabling service..."
-        systemctl --user disable "${SERVICE_NAME}"
-    fi
+        # Disable the funasr service
+        if systemctl --user is-enabled "${FUNASR_SERVICE_NAME}" &> /dev/null; then
+            echo "Disabling funasr-wss-server service..."
+            systemctl --user disable "${FUNASR_SERVICE_NAME}"
+        fi
 
-    # Remove the service file
-    echo "Removing service file..."
-    rm -f "${SERVICE_FILE}"
+        # Remove the funasr service file
+        echo "Removing funasr-wss-server service file..."
+        rm -f "${FUNASR_SERVICE_FILE}"
+    fi
 
     # Reload systemd user daemon
     systemctl --user daemon-reload
 
     echo ""
     echo "Uninstallation complete!"
-    echo "The voice-input service has been removed."
+    echo "The voice-input and funasr-wss-server services have been removed."
 }
 
 # Main

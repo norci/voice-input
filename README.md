@@ -54,6 +54,35 @@ voice-input
 voice-input-toggle
 ```
 
+## Systemd 服务管理
+
+项目提供了 systemd user service 管理脚本，可以自动管理 voice-input 和 funasr-wss-server 服务：
+
+```bash
+# 安装服务（自动安装 voice-input 和 funasr-wss-server）
+./scripts/manage-systemd.sh install
+
+# 卸载服务
+./scripts/manage-systemd.sh uninstall
+```
+
+安装后，服务会自动启动并随用户会话启动。voice-input 服务依赖于 funasr-wss-server 服务。
+
+手动管理服务：
+```bash
+# 启动服务
+systemctl --user start voice-input
+systemctl --user start funasr-wss-server
+
+# 查看状态
+systemctl --user status voice-input
+systemctl --user status funasr-wss-server
+
+# 停止服务
+systemctl --user stop voice-input
+systemctl --user stop funasr-wss-server
+```
+
 ## Hyprland 快捷键配置
 
 编辑 `~/.config/hypr/hyprland.conf`：

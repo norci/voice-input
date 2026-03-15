@@ -7,14 +7,12 @@ set -e
 # 配置
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-FUNASR_WSS_SERVER="$PROJECT_ROOT/FunASR/runtime/python/websocket/funasr_wss_server.py"
-PID_FILE="/tmp/funasr-wss-server.pid"
-LOG_FILE="/tmp/funasr-wss-server.log"
+PID_FILE="${XDG_RUNTIME_DIR:-/tmp}/funasr-wss-server.pid"
+LOG_FILE="${XDG_RUNTIME_DIR:-/tmp}/funasr-wss-server.log"
 
 # 默认参数
 HOST="127.0.0.1"
 PORT="10095"
-NGPU="0"
 
 # 解析命令行参数
 ACTION="$1"
@@ -30,21 +28,12 @@ while [[ $# -gt 0 ]]; do
             PORT="$2"
             shift 2
             ;;
-        --ngpu)
-            NGPU="$2"
-            shift 2
-            ;;
         *)
             echo "未知参数: $1"
             exit 1
             ;;
     esac
 done
-
-# 激活虚拟环境
-if [ -f "$PROJECT_ROOT/.venv/bin/activate" ]; then
-    source "$PROJECT_ROOT/.venv/bin/activate"
-fi
 
 # 获取 PID
 get_pid() {
@@ -73,14 +62,11 @@ do_start() {
     echo "启动 FunASR WebSocket Server..."
     echo "  Host: $HOST"
     echo "  Port: $PORT"
-    echo "  GPU:  $NGPU"
 
     # 启动服务并记录 PID
-    cd "$PROJECT_ROOT/FunASR/runtime/python/websocket"
-    nohup python funasr_wss_server.py \
+    nohup uv --directory "$PROJECT_ROOT/FunASR/runtime/python/websocket" run funasr_wss_server.py \
         --host "$HOST" \
         --port "$PORT" \
-        --ngpu "$NGPU" \
         > "$LOG_FILE" 2>&1 &
 
     echo $! > "$PID_FILE"
@@ -157,12 +143,11 @@ case "$ACTION" in
         do_status
         ;;
     *)
-        echo "用法: $0 {start|stop|restart|status} [--host HOST] [--port PORT] [--ngpu NGPU]"
+        echo "用法: $0 {start|stop|restart|status} [--host HOST] [--port PORT]"
         echo ""
         echo "参数:"
         echo "  --host HOST   监听地址 (默认: 127.0.0.1)"
         echo "  --port PORT  监听端口 (默认: 10095)"
-        echo "  --ngpu NGPU  GPU 数量 (默认: 1)"
         exit 1
         ;;
 esac
