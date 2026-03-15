@@ -188,14 +188,18 @@ class AsrClient:
             except websockets.exceptions.ConnectionClosed:
                 pass
 
+        logger.info(f"准备连接到 ASR 服务器: {uri}")
         try:
-            logger.info(f"连接到 ASR 服务器: {uri}")
-            async with websockets.connect(
+            logger.info(f"正在连接到 ASR 服务器: {uri}")
+            ws = await websockets.connect(
                 uri,
                 subprotocols=[websockets.Subprotocol("binary")],
                 ping_interval=None,
                 ssl=ssl_context,
-            ) as ws:
+            )
+            logger.info("WebSocket 连接已建立")
+
+            try:
                 # 保存引用，供主线程跨线程关闭连接
                 self._ws = ws
                 self._event_loop = asyncio.get_running_loop()
@@ -217,6 +221,14 @@ class AsrClient:
                     receive_results(ws),
                 )
                 return final_text
+            finally:
+                # 确保 WebSocket 连接被关闭
+                if ws is not None:
+                    with suppress(Exception):
+                        await ws.close()
+        except (OSError, ConnectionRefusedError) as e:
+            logger.error(f"ASR 服务器连接失败 (OSError): {e}", exc_info=True)
+            raise
 
         except websockets.exceptions.ConnectionClosed:
             # 连接被关闭（停止时触发），正常退出
@@ -225,7 +237,8 @@ class AsrClient:
 
         except Exception as e:
             logger.error(f"识别异常: {e}", exc_info=True)
-            return final_text
+            # 重新抛出异常，让调用者能够处理错误
+            raise
 
     def stop(self) -> None:
         """停止语音识别（线程安全）。
@@ -242,10 +255,7 @@ class AsrClient:
 
         # 关闭 WebSocket 连接，中断阻塞的 ws.recv()
         if self._ws is not None:
-            self._event_loop.call_soon_threadsafe(
-                asyncio.ensure_future,
-                self._close_ws(),
-            )
+            asyncio.run_coroutine_threadsafe(self._close_ws(), self._event_loop)
 
     async def _close_ws(self) -> None:
         """关闭 WebSocket 连接（在事件循环中执行）。"""

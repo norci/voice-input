@@ -162,8 +162,9 @@ class RecognitionManager:
             )
             logger.info(f"识别完成: {final_text}")
         except Exception as e:
-            logger.error(f"录音启动失败: {e}")
+            logger.error(f"录音启动失败: {e}", exc_info=True)
             if self._on_error_callback:
+                logger.info("调用错误回调")
                 self._on_error_callback("RECORDING_START_FAILED", str(e))
             return ""
         else:
@@ -320,10 +321,14 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
     def _on_toggle_clicked(self, button: Gtk.Button) -> None:
         """切换按钮点击事件。"""
         logger.info(f"切换按钮点击，当前录音状态: {self._is_recording}")
+        logger.info(f"按钮当前标签: {button.get_label()}")
         if self._is_recording:
+            logger.info("调用 stop_recording")
             self.stop_recording()
         else:
+            logger.info("调用 start_recording")
             self.start_recording()
+        logger.info(f"录音状态更新为: {self._is_recording}")
 
     def _on_quit_clicked(self, button: Gtk.Button) -> None:
         """退出按钮点击事件。"""
@@ -343,6 +348,7 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
         # 更新 UI 状态
         self._is_recording = True
         self._ui_manager.update_status(True)
+        logger.info(f"开始录音，设置 _is_recording = {self._is_recording}")
 
         # 创建语音识别管理器
         self._recognition_manager = RecognitionManager(
@@ -394,11 +400,15 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
             message: 错误消息
         """
         logger.error(f"识别错误: {error_type} - {message}")
-        # 可以在这里添加错误显示逻辑
+        # 显示错误消息给用户
+        error_message = f"错误: {message}"
+        logger.info(f"安排显示错误消息: {error_message}")
+        GLib.idle_add(self._ui_manager.update_result_display, error_message)
 
     def _on_recognition_complete(self) -> bool:
         """识别完成回调。"""
         # 更新 UI 状态
+        logger.info(f"识别完成，设置 _is_recording = False (当前值: {self._is_recording})")
         self._is_recording = False
         self._ui_manager.update_status(False)
 
