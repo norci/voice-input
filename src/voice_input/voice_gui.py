@@ -606,6 +606,9 @@ def main() -> None:
     logging.getLogger().addHandler(file_handler)
     logging.getLogger().setLevel(logging.DEBUG)
 
+    # 禁用 websockets 调试日志
+    logging.getLogger("websockets").setLevel(logging.WARNING)
+
     # 加载配置
     config = load_config()
 
