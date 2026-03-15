@@ -27,6 +27,14 @@ class AsrConfig:
 
 
 @dataclass
+class AudioConfig:
+    """音频配置。"""
+
+    gain: float = 0.5
+    threshold: float = 0.01
+
+
+@dataclass
 class WindowConfig:
     """窗口配置。"""
 
@@ -36,6 +44,7 @@ class Config:
     """应用配置。"""
 
     asr: AsrConfig = field(default_factory=AsrConfig)
+    audio: AudioConfig = field(default_factory=AudioConfig)
     window: WindowConfig = field(default_factory=WindowConfig)
 
     @classmethod
@@ -49,6 +58,7 @@ class Config:
             Config 实例
         """
         asr_data = data.get("asr", {})
+        audio_data = data.get("audio", {})
 
         return cls(
             asr=AsrConfig(
@@ -58,6 +68,10 @@ class Config:
                 chunk_size=asr_data.get("chunk_size", "5,10,5"),
                 chunk_interval=asr_data.get("chunk_interval", 10),
                 reconnect_interval=asr_data.get("reconnect_interval", 3),
+            ),
+            audio=AudioConfig(
+                gain=audio_data.get("gain", 0.5),
+                threshold=audio_data.get("threshold", 0.01),
             ),
             window=WindowConfig(),
         )
@@ -76,6 +90,10 @@ class Config:
                 "chunk_size": self.asr.chunk_size,
                 "chunk_interval": self.asr.chunk_interval,
                 "reconnect_interval": self.asr.reconnect_interval,
+            },
+            "audio": {
+                "gain": self.audio.gain,
+                "threshold": self.audio.threshold,
             },
             "window": {},
         }

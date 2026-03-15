@@ -7,8 +7,18 @@
 server_host = "127.0.0.1"
 server_port = 10095
 server_mode = "2pass"
-chunk_size = "5,10,5"
+chunk_size = "10,20,10"
 chunk_interval = 10
+
+# 音频配置
+# 控制麦克风灵敏度和音频处理
+[audio]
+# 音频增益因子 (0.0 - 1.0)
+# 值越小，灵敏度越低。0.5 表示将音量减半
+gain = 0.5
+# 音频阈值 (0.0 - 1.0)
+# 低于此阈值的音频将被忽略。0.01 表示忽略低于最大音量 1% 的信号
+threshold = 0.01
 
 # 窗口配置
 [window]

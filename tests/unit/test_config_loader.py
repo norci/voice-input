@@ -8,6 +8,7 @@ from pathlib import Path
 
 from src.voice_input.config_loader import (
     AsrConfig,
+    AudioConfig,
     Config,
     WindowConfig,
     create_default_config,
@@ -46,6 +47,24 @@ class TestAsrConfig:
         assert config.chunk_interval == 20
 
 
+class TestAudioConfig:
+    """AudioConfig 类测试。"""
+
+    def test_default_values(self) -> None:
+        """测试默认值。"""
+        config = AudioConfig()
+
+        assert config.gain == 0.5
+        assert config.threshold == 0.01
+
+    def test_custom_values(self) -> None:
+        """测试自定义值。"""
+        config = AudioConfig(gain=0.3, threshold=0.05)
+
+        assert config.gain == 0.3
+        assert config.threshold == 0.05
+
+
 class TestWindowConfig:
     """WindowConfig 类测试。"""
 
@@ -66,6 +85,8 @@ class TestConfig:
 
         assert config.asr.server_host == "127.0.0.1"
         assert config.asr.server_port == 10095
+        assert config.audio.gain == 0.5
+        assert config.audio.threshold == 0.01
 
     def test_from_dict_empty(self) -> None:
         """测试从空字典创建。"""
@@ -73,6 +94,8 @@ class TestConfig:
 
         assert config.asr.server_host == "127.0.0.1"
         assert config.asr.server_port == 10095
+        assert config.audio.gain == 0.5
+        assert config.audio.threshold == 0.01
 
     def test_from_dict_partial(self) -> None:
         """测试从部分字典创建。"""
@@ -82,6 +105,8 @@ class TestConfig:
         # Window config should be empty
         assert config.window is not None
         assert config.asr.server_host == "127.0.0.1"  # 默认值
+        assert config.audio.gain == 0.5  # 默认值
+        assert config.audio.threshold == 0.01  # 默认值
 
     def test_from_dict_full(self) -> None:
         """测试从完整字典创建。"""
@@ -93,6 +118,10 @@ class TestConfig:
                 "chunk_size": "10,20,10",
                 "chunk_interval": 20,
             },
+            "audio": {
+                "gain": 0.3,
+                "threshold": 0.05,
+            },
             "window": {},
         }
         config = Config.from_dict(data)
@@ -102,6 +131,8 @@ class TestConfig:
         assert config.asr.server_mode == "offline"
         assert config.asr.chunk_size == "10,20,10"
         assert config.asr.chunk_interval == 20
+        assert config.audio.gain == 0.3
+        assert config.audio.threshold == 0.05
 
     def test_to_dict(self) -> None:
         """测试转换为字典。"""
@@ -113,6 +144,7 @@ class TestConfig:
                 chunk_size="10,20,10",
                 chunk_interval=20,
             ),
+            audio=AudioConfig(gain=0.3, threshold=0.05),
             window=WindowConfig(),
         )
 
@@ -123,6 +155,8 @@ class TestConfig:
         assert data["asr"]["server_mode"] == "offline"
         assert data["asr"]["chunk_size"] == "10,20,10"
         assert data["asr"]["chunk_interval"] == 20
+        assert data["audio"]["gain"] == 0.3
+        assert data["audio"]["threshold"] == 0.05
         assert data["window"] == {}
 
 
@@ -146,6 +180,10 @@ server_mode = "offline"
 chunk_size = "10,20,10"
 chunk_interval = 20
 
+[audio]
+gain = 0.3
+threshold = 0.05
+
 [window]
 """
         with tempfile.NamedTemporaryFile(mode="w", suffix=".toml", delete=False) as f:
@@ -160,6 +198,8 @@ chunk_interval = 20
             assert config.asr.server_mode == "offline"
             assert config.asr.chunk_size == "10,20,10"
             assert config.asr.chunk_interval == 20
+            assert config.audio.gain == 0.3
+            assert config.audio.threshold == 0.05
         finally:
             temp_path.unlink()
 
@@ -179,6 +219,8 @@ chunk_interval = 20
             assert config.window is not None
             assert config.asr.server_host == "127.0.0.1"  # 默认值
             assert config.asr.server_port == 10095  # 默认值
+            assert config.audio.gain == 0.5  # 默认值
+            assert config.audio.threshold == 0.01  # 默认值
         finally:
             temp_path.unlink()
 
@@ -193,6 +235,7 @@ class TestSaveConfig:
                 server_host="192.168.1.100",
                 server_port=8080,
             ),
+            audio=AudioConfig(gain=0.3, threshold=0.05),
             window=WindowConfig(),
         )
 
@@ -204,6 +247,8 @@ class TestSaveConfig:
 
             assert loaded_config.asr.server_host == "192.168.1.100"
             assert loaded_config.asr.server_port == 8080
+            assert loaded_config.audio.gain == 0.3
+            assert loaded_config.audio.threshold == 0.05
 
     def test_save_creates_directory(self) -> None:
         """测试保存时创建目录。"""

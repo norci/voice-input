@@ -51,6 +51,9 @@ class AsrClientConfig:
     chunk_size: str = "5,10,5"
     chunk_interval: int = 10
     sample_rate: int = 16000
+    # 音频灵敏度控制
+    gain: float = 0.5  # 增益因子 (0.0 - 1.0)
+    threshold: float = 0.01  # 阈值 (0.0 - 1.0)
 
     @classmethod
     def from_config(cls, config: "Config") -> "AsrClientConfig":
@@ -61,6 +64,8 @@ class AsrClientConfig:
             mode=config.asr.server_mode,
             chunk_size=config.asr.chunk_size,
             chunk_interval=config.asr.chunk_interval,
+            gain=config.audio.gain,
+            threshold=config.audio.threshold,
         )
 
 
@@ -125,10 +130,18 @@ class AsrClient:
                         # Check stop_event again after blocking read
                         if stop_event.is_set():
                             break
-                        audio_bytes = (indata[:, 0] * 32767).astype(np.int16).tobytes()
+
+                        # 应用增益因子
+                        audio_data = indata[:, 0] * self._config.gain
+
+                        # 应用阈值过滤：低于阈值则发送静音（保持时序）
+                        max_amplitude = np.max(np.abs(audio_data))
+                        if max_amplitude < self._config.threshold:
+                            audio_data = np.zeros_like(audio_data)
+
+                        audio_bytes = (audio_data * 32767).astype(np.int16).tobytes()
                         await ws.send(audio_bytes)
-                        # 控制发送节奏
-                        await asyncio.sleep(0.01)
+                        await asyncio.sleep(0)
             except OSError:
                 pass
             except asyncio.CancelledError:
@@ -147,7 +160,7 @@ class AsrClient:
                     try:
                         # Use shorter timeout to make the loop more responsive to stop_event
                         meg = await asyncio.wait_for(ws.recv(), timeout=0.1)
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         # Check stop_event again after timeout to break if stop was requested
                         if stop_event.is_set():
                             break
