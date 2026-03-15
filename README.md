@@ -17,6 +17,7 @@ Linux 桌面中文语音输入法，基于 FunASR。
 - PyGObject
 - sounddevice
 - FunASR WebSocket 服务器 (本地或远程)
+- 其他 Python 依赖（如 torch、torchaudio 等）将自动安装
 
 ## 安装
 
@@ -100,6 +101,7 @@ mypy src/
 ```
 voice-input/
 ├── src/voice_input/
+│   ├── __init__.py
 │   ├── voice_gui.py      # 主 GUI 应用
 │   ├── asr_client.py     # ASR WebSocket 客户端
 │   ├── config_loader.py # 配置加载
@@ -107,6 +109,8 @@ voice-input/
 ├── config/
 │   └── config.toml       # 配置文件
 ├── tests/
+│   ├── unit/
+│   └── integration/
 └── pyproject.toml
 ```
 
