@@ -60,7 +60,6 @@ class AppState:
     current_text: str = ""
     interim_text: str = ""
     final_text: str = ""
-    stop_event: asyncio.Event | None = None
 
 
 class VoiceGUIWindow(Gtk.ApplicationWindow):
@@ -310,10 +309,6 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
             self._send_error_event_async("ASR_CLIENT_NOT_INITIALIZED", error_msg)
             return
 
-        # 创建停止事件（在同一个事件循环中），保存到 state 以便停止时访问
-        stop_event = asyncio.Event()
-        self._state.stop_event = stop_event
-
         # 用于跟踪上一次注入的 final 结果，避免重复注入相同内容
         last_injected_text = ""
 
@@ -336,9 +331,8 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
 
         try:
             logger.info("开始语音识别...")
-            # 使用新的简化 API
+            # stop_event 由 AsrClient 内部管理
             final_text = await self._asr_client.recognize_with_stop(
-                stop_event=stop_event,
                 on_result=on_result,
             )
 
@@ -367,19 +361,15 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
             logger.info("finally block: result display cleared")
 
     def stop_recording(self) -> None:
-        """停止录音。"""
-        logger.info(
-            "stop_recording called, is_recording: %s, stop_event: %s",
-            self._state.is_recording,
-            self._state.stop_event,
-        )
+        """停止录音。
 
-        # 设置停止事件，通知识别任务停止
-        if self._state.stop_event:
-            self._state.stop_event.set()
-            logger.info("stop_event.set() called")
-        else:
-            logger.warning("stop_event is None!")
+        调用 AsrClient.stop() 停止识别，所有异步细节由 AsrClient 内部处理。
+        """
+        logger.info("stop_recording called, is_recording: %s", self._state.is_recording)
+
+        if self._asr_client:
+            self._asr_client.stop()
+            logger.info("已通知 AsrClient 停止")
 
         self._state.is_recording = False
         # 使用 GLib.idle_add 确保在主线程更新 UI
@@ -396,13 +386,12 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
         """退出应用。"""
         logger.info("正在退出应用...")
 
-        # 停止异步录音任务
-        if self._recording_task and not self._recording_task.done():
-            self._state.is_recording = False
-            self._recording_task.cancel()
+        # 如果仍在录音，优雅停止
+        if self._state.is_recording:
+            self.stop_recording()
 
-        # 注意：新的简化 API 不需要显式 disconnect
-        # 连接在识别完成后会自动关闭
+        # 注意：异步任务会在 WebSocket 关闭后自然退出
+        # 录音线程是 daemon 线程，进程退出时自动终止
         logger.info("关闭 GUI 窗口")
 
         if self.get_application():

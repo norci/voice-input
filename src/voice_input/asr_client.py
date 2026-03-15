@@ -9,6 +9,7 @@ import json
 import logging
 import ssl
 from collections.abc import Awaitable, Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
@@ -89,22 +90,33 @@ class AsrClient:
             config = AsrClientConfig()
 
         self._config = config
+        self._ws: websockets.ClientConnection | None = None
+        self._event_loop: asyncio.AbstractEventLoop | None = None
+        self._stop_event: asyncio.Event | None = None
         logger.info(f"ASR 客户端已初始化 (服务: {config.host}:{config.port})")
 
     async def recognize_with_stop(
         self,
-        stop_event: asyncio.Event,
+        stop_event: asyncio.Event | None = None,
         on_result: ResultCallback | None = None,
     ) -> str:
-        """执行一次完整的语音识别，支持通过事件停止。
+        """执行一次完整的语音识别，支持停止。
+
+        stop_event 由 AsrClient 内部管理，调用 stop() 即可停止。
+        也可外部传入自定义 stop_event（用于测试）。
 
         Args:
-            stop_event: 停止事件，当 set() 时停止识别
+            stop_event: 可选的外部停止事件（测试用），默认内部创建
             on_result: 结果回调函数
 
         Returns:
             最终识别结果文本
         """
+        # 内部管理 stop_event，供 stop() 方法跨线程使用
+        if stop_event is None:
+            stop_event = asyncio.Event()
+        self._stop_event = stop_event
+
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
@@ -127,14 +139,11 @@ class AsrClient:
                 ) as stream:
                     while not stop_event.is_set():
                         indata, _ = stream.read(blocksize)
-                        # Check stop_event again after blocking read
                         if stop_event.is_set():
                             break
 
-                        # 应用增益因子
                         audio_data = indata[:, 0] * self._config.gain
 
-                        # 应用阈值过滤：低于阈值则发送静音（保持时序）
                         max_amplitude = np.max(np.abs(audio_data))
                         if max_amplitude < self._config.threshold:
                             audio_data = np.zeros_like(audio_data)
@@ -142,9 +151,7 @@ class AsrClient:
                         audio_bytes = (audio_data * 32767).astype(np.int16).tobytes()
                         await ws.send(audio_bytes)
                         await asyncio.sleep(0)
-            except OSError:
-                pass
-            except asyncio.CancelledError:
+            except (OSError, websockets.exceptions.ConnectionClosed):
                 pass
 
         async def receive_results(ws: websockets.ClientConnection) -> None:
@@ -152,20 +159,9 @@ class AsrClient:
             nonlocal final_text
             last_final_text = ""
             try:
-                while True:
-                    # Check stop_event before receiving to break early if stop was requested
-                    if stop_event.is_set():
-                        break
-
-                    try:
-                        # Use shorter timeout to make the loop more responsive to stop_event
-                        meg = await asyncio.wait_for(ws.recv(), timeout=0.1)
-                    except TimeoutError:
-                        # Check stop_event again after timeout to break if stop was requested
-                        if stop_event.is_set():
-                            break
-                        # Otherwise, continue to check stop_event again on next iteration
-                        continue
+                while not stop_event.is_set():
+                    # 阻塞接收，连接关闭时立即抛出 ConnectionClosed
+                    meg = await ws.recv()
 
                     meg = json.loads(meg)
                     text = meg.get("text", "")
@@ -175,9 +171,7 @@ class AsrClient:
                     if not text:
                         continue
 
-                    # 判断结果类型
                     if mode in ("offline", "2pass-offline") or is_final:
-                        # 避免重复处理相同的 final 结果
                         if text == last_final_text:
                             continue
                         last_final_text = text
@@ -191,13 +185,7 @@ class AsrClient:
                     if on_result:
                         await on_result(text, result_type)
 
-                    # 检查停止标志 after processing result
-                    if stop_event.is_set():
-                        break
-
             except websockets.exceptions.ConnectionClosed:
-                pass
-            except asyncio.CancelledError:
                 pass
 
         try:
@@ -208,6 +196,10 @@ class AsrClient:
                 ping_interval=None,
                 ssl=ssl_context,
             ) as ws:
+                # 保存引用，供主线程跨线程关闭连接
+                self._ws = ws
+                self._event_loop = asyncio.get_running_loop()
+
                 # 发送初始化消息
                 init_msg = {
                     "mode": self._config.mode,
@@ -219,15 +211,48 @@ class AsrClient:
                 logger.info("已建立连接，开始识别...")
 
                 # 并发执行发送和接收
+                # 连接关闭时两个子任务都捕获 ConnectionClosed 并正常返回
                 await asyncio.gather(
                     send_audio(ws),
                     receive_results(ws),
                 )
+                return final_text
+
+        except websockets.exceptions.ConnectionClosed:
+            # 连接被关闭（停止时触发），正常退出
+            logger.info("WebSocket 连接已关闭")
+            return final_text
 
         except Exception as e:
             logger.error(f"识别异常: {e}", exc_info=True)
+            return final_text
 
-        return final_text
+    def stop(self) -> None:
+        """停止语音识别（线程安全）。
+
+        可从任何线程调用。内部通过 call_soon_threadsafe
+        在事件循环中设置 stop_event 并关闭 WebSocket 连接。
+        """
+        if self._event_loop is None or not self._event_loop.is_running():
+            return
+
+        # 设置停止事件
+        if self._stop_event is not None:
+            self._event_loop.call_soon_threadsafe(self._stop_event.set)
+
+        # 关闭 WebSocket 连接，中断阻塞的 ws.recv()
+        if self._ws is not None:
+            self._event_loop.call_soon_threadsafe(
+                asyncio.ensure_future,
+                self._close_ws(),
+            )
+
+    async def _close_ws(self) -> None:
+        """关闭 WebSocket 连接（在事件循环中执行）。"""
+        if self._ws is not None:
+            with suppress(Exception):
+                await self._ws.close()
+            self._ws = None
 
 
 def create_asr_client(
