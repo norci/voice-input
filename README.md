@@ -101,6 +101,18 @@ windowrule = match:class ^(com\.voiceinput\.gui)$, match:title ^(Voice Input)$, 
 hyprctl reload
 ```
 
+## 重要：Fcitx 输入法设置
+
+**使用语音输入前，必须将 fcitx 切换到英文输入状态。**
+
+原因：`wtype` 直接插入文字（非模拟键盘事件），但如果 fcitx 处于中文输入状态，会拦截并处理 `wtype` 注入的文字，导致注入错误的字符（如 `1234567890-+`）。
+
+另外，fcitx 中文状态下的输入可能会误触发系统快捷键（如 Hyprland 的 F4 绑定），导致语音识别意外停止。
+
+解决方法：
+- 使用语音输入前，按 `Shift` 或 `Ctrl+Space` 将 fcitx 切换到英文状态
+- 或者在 fcitx 配置中，将语音输入窗口设为始终使用英文输入
+
 需要运行 FunASR WebSocket 服务器。可使用项目提供的脚本：
 
 ```bash

@@ -300,10 +300,11 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
         try:
             if self._recognition_manager:
                 loop.run_until_complete(self._recognition_manager.start_recognition())
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(f"识别任务异常: {e}")
         finally:
             loop.close()
+            logger.info("识别任务结束，调用 _on_recognition_complete")
             GLib.idle_add(self._on_recognition_complete)
 
     def _on_recognition_result(self, text: str, result_type: ResultType) -> None:
@@ -313,8 +314,8 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
             text: 识别文本
             result_type: 结果类型
         """
-        # 显示所有结果
-        self._ui_manager.update_result_display(text)
+        # 显示所有结果（使用 GLib.idle_add 确保在主线程执行）
+        GLib.idle_add(self._ui_manager.update_result_display, text)
 
         # 如果是最终结果，注入文本
         if result_type == ResultType.FINAL:

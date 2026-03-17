@@ -150,8 +150,9 @@ class AsrClient:
                         audio_bytes = (audio_data * 32767).astype(np.int16).tobytes()
                         await ws.send(audio_bytes)
                         await asyncio.sleep(0)
-            except (OSError, websockets.exceptions.ConnectionClosed):
-                pass
+            except (OSError, websockets.exceptions.ConnectionClosed) as e:
+                logger.debug(f"send_audio 结束: {type(e).__name__}: {e}")
+            logger.debug("send_audio 退出")
 
         async def receive_results(ws: websockets.ClientConnection) -> None:
             """接收识别结果。"""
@@ -182,8 +183,9 @@ class AsrClient:
                     if on_result:
                         await on_result(text, result_type)
 
-            except websockets.exceptions.ConnectionClosed:
-                pass
+            except websockets.exceptions.ConnectionClosed as e:
+                logger.debug(f"receive_results 结束: ConnectionClosed: {e}")
+            logger.debug("receive_results 退出")
 
         try:
             ws = await websockets.connect(
@@ -213,6 +215,7 @@ class AsrClient:
                     send_audio(ws),
                     receive_results(ws),
                 )
+                logger.debug("recognize_with_stop: gather 完成，正常返回")
                 return final_text
             finally:
                 # 确保 WebSocket 连接被关闭
