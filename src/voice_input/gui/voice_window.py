@@ -1,6 +1,7 @@
 """Voice GUI Window."""
 
 import logging
+import os
 import time
 
 import gi
@@ -167,11 +168,7 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
             app = self.get_application()
             if app:
                 app.quit()
-            import os
-
             os._exit(0)
         except Exception:
-            import os
-
             os._exit(1)
         return False
