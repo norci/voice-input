@@ -61,7 +61,7 @@ class TestVoiceRecorder:
     def test_init_creates_queue(self) -> None:
         """测试初始化时创建音频队列。"""
         from voice_input.asr_config import AsrClientConfig
-        from voice_input.voice_gui import VoiceRecorder
+        from voice_input.gui import VoiceRecorder
 
         config = AsrClientConfig()
 
@@ -76,7 +76,7 @@ class TestVoiceRecorder:
     def test_init_sets_config(self) -> None:
         """测试初始化时保存配置。"""
         from voice_input.asr_config import AsrClientConfig
-        from voice_input.voice_gui import VoiceRecorder
+        from voice_input.gui import VoiceRecorder
 
         config = AsrClientConfig(
             host="192.168.1.100",
@@ -96,7 +96,7 @@ class TestVoiceRecorder:
     def test_init_default_values(self) -> None:
         """测试默认初始化值。"""
         from voice_input.asr_config import AsrClientConfig
-        from voice_input.voice_gui import VoiceRecorder
+        from voice_input.gui import VoiceRecorder
 
         config = AsrClientConfig()
         vr = VoiceRecorder(
@@ -112,7 +112,7 @@ class TestVoiceRecorder:
     def test_start_recording_only_creates_recorder(self) -> None:
         """测试 start_recording_only 创建 AudioRecorder。"""
         from voice_input.asr_config import AsrClientConfig
-        from voice_input.voice_gui import VoiceRecorder
+        from voice_input.gui import VoiceRecorder
 
         config = AsrClientConfig()
         vr = VoiceRecorder(
@@ -120,8 +120,8 @@ class TestVoiceRecorder:
             on_result_callback=lambda text, result_type: None,
         )
 
-        with patch("voice_input.voice_gui.AudioRecorder") as mock_recorder_class:
-            with patch("voice_input.voice_gui.asyncio.create_task") as mock_create_task:
+        with patch("voice_input.gui.voice_recorder.AudioRecorder") as mock_recorder_class:
+            with patch("voice_input.gui.voice_recorder.asyncio.create_task") as mock_create_task:
                 mock_task = MagicMock()
                 mock_create_task.return_value = mock_task
 
@@ -138,7 +138,7 @@ class TestVoiceRecorder:
     def test_start_recording_only_reuses_existing_recorder(self) -> None:
         """测试 start_recording_only 复用已有 AudioRecorder。"""
         from voice_input.asr_config import AsrClientConfig
-        from voice_input.voice_gui import VoiceRecorder
+        from voice_input.gui import VoiceRecorder
 
         config = AsrClientConfig()
         vr = VoiceRecorder(
@@ -149,8 +149,8 @@ class TestVoiceRecorder:
         mock_existing_recorder = MagicMock()
         vr._audio_recorder = mock_existing_recorder
 
-        with patch("voice_input.voice_gui.AudioRecorder") as mock_recorder_class:
-            with patch("voice_input.voice_gui.asyncio.create_task") as mock_create_task:
+        with patch("voice_input.gui.voice_recorder.AudioRecorder") as mock_recorder_class:
+            with patch("voice_input.gui.voice_recorder.asyncio.create_task") as mock_create_task:
                 vr.start_recording_only()
 
                 mock_recorder_class.assert_not_called()
@@ -159,7 +159,7 @@ class TestVoiceRecorder:
     def test_stop_recording_only_stops_recorder(self) -> None:
         """测试 stop_recording_only 停止 AudioRecorder。"""
         from voice_input.asr_config import AsrClientConfig
-        from voice_input.voice_gui import VoiceRecorder
+        from voice_input.gui import VoiceRecorder
 
         config = AsrClientConfig()
         vr = VoiceRecorder(
@@ -179,7 +179,7 @@ class TestVoiceRecorder:
     def test_stop_recording_only_handles_none_recorder(self) -> None:
         """测试 stop_recording_only 处理无 AudioRecorder 的情况。"""
         from voice_input.asr_config import AsrClientConfig
-        from voice_input.voice_gui import VoiceRecorder
+        from voice_input.gui import VoiceRecorder
 
         config = AsrClientConfig()
         vr = VoiceRecorder(
@@ -201,7 +201,7 @@ class TestVoiceRecorderCallbacks:
     def test_result_callback_called(self) -> None:
         """测试结果回调被正确调用。"""
         from voice_input.asr_config import AsrClientConfig, ResultType
-        from voice_input.voice_gui import VoiceRecorder
+        from voice_input.gui import VoiceRecorder
 
         result_received = {}
 
@@ -223,7 +223,7 @@ class TestVoiceRecorderCallbacks:
     def test_error_callback_called(self) -> None:
         """测试错误回调被正确调用。"""
         from voice_input.asr_config import AsrClientConfig
-        from voice_input.voice_gui import VoiceRecorder
+        from voice_input.gui import VoiceRecorder
 
         error_received = {}
 

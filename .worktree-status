@@ -1,0 +1,24 @@
+# Worktree 状态
+
+- **Worktree**: voice-input-facade
+- **分支**: feature-facade
+- **负责人**: Agent-Facade
+- **开始时间**: 2026-03-18
+- **预计完成**: 2026-03-19
+- **当前状态**: 进行中
+- **完成度**: 0%
+
+## 任务清单
+
+- [ ] 创建 `services/` 目录结构
+- [ ] 实现 `VoiceService` 类 (IVoiceService)
+- [ ] 实现 `EventBus` 类 (IEventBus)
+- [ ] 实现 `ServiceFactory` 类 (IServiceFactory)
+- [ ] 创建 `gui/` 目录结构
+- [ ] 分离 GUI 组件 (voice_app, voice_window, ui_manager, text_injector)
+- [ ] 重构入口使用 VoiceService
+- [ ] 运行测试
+
+## 问题记录
+
+(无)
