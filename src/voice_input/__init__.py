@@ -17,7 +17,7 @@ from voice_input.asr_config import AsrClientConfig, ResultType
 
 # 配置加载模块
 from voice_input.config_loader import Config, load_config
-from voice_input.gui import VoiceGUIApplication, VoiceGUIWindow, VoiceRecorder
+from voice_input.gui import VoiceGUIApplication, VoiceGUIWindow
 
 # 新架构模块
 from voice_input.services import EventBus, ServiceFactory, VoiceService
@@ -25,13 +25,12 @@ from voice_input.services import EventBus, ServiceFactory, VoiceService
 __all__ = [
     "AsrClientConfig",
     "Config",
+    "EventBus",
     "ResultType",
+    "ServiceFactory",
     "VoiceGUIApplication",
     "VoiceGUIWindow",
-    "VoiceRecorder",
+    "VoiceService",
     "__version__",
     "load_config",
-    "VoiceService",
-    "EventBus",
-    "ServiceFactory",
 ]
