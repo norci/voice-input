@@ -11,10 +11,8 @@ import threading
 from collections.abc import Callable
 from typing import cast
 
-import websockets
-
 from voice_input.asr_config import AsrClientConfig, AsrResultDict, ResultType
-from voice_input.audio_recorder import AudioChunk, AudioRecorder
+from voice_input.audio.audio_recorder import AudioChunk, AudioRecorder
 from voice_input.connection_manager import ConnectionManager
 
 logger = logging.getLogger(__name__)
@@ -31,7 +29,6 @@ class AudioEngine:
         """
         self._config = config
         self._conn_manager: ConnectionManager | None = None
-        self._ws: websockets.ClientConnection | None = None
         self._audio_recorder: AudioRecorder | None = None
         self._audio_queue: queue.Queue[AudioChunk] = queue.Queue()
 
@@ -161,7 +158,7 @@ class AudioEngine:
         async def main() -> None:
             # 启动连接（带重连）
             conn_manager = cast(ConnectionManager, self._conn_manager)
-            self._ws = await conn_manager.connect_with_retry(self._on_reconnecting)
+            await conn_manager.connect_with_retry(self._on_reconnecting)
 
             # 启动发送和接收任务
             self._send_task = asyncio.create_task(self._send_loop())
@@ -190,7 +187,6 @@ class AudioEngine:
         finally:
             logger.debug("事件循环结束")
             # 清理
-            self._ws = None
             self._conn_manager = None
 
     def _on_reconnecting(self, attempt: int) -> None:
@@ -204,8 +200,8 @@ class AudioEngine:
         while self._is_running and self._is_sending:
             try:
                 chunk = self._audio_queue.get_nowait()
-                if self._ws:
-                    await self._ws.send(chunk.data)
+                if self._conn_manager:
+                    await self._conn_manager.send(chunk.data)
             except queue.Empty:
                 await asyncio.sleep(0.05)
             except Exception as e:
@@ -218,14 +214,12 @@ class AudioEngine:
         """接收循环 - 始终运行直到完全停止，自动重连"""
         logger.debug("接收循环启动")
         while self._is_running:
-            if not self._ws:
+            if not self._conn_manager or not self._conn_manager.is_connected:
                 # 尝试重连
                 try:
                     logger.info("连接已断开，尝试重连...")
                     if self._conn_manager:
-                        self._ws = await self._conn_manager.connect_with_retry(
-                            self._on_reconnecting
-                        )
+                        await self._conn_manager.connect_with_retry(self._on_reconnecting)
                         logger.info("重连成功")
                     else:
                         logger.warning("ConnectionManager is None, stopping reconnection attempts")
@@ -237,17 +231,14 @@ class AudioEngine:
                     continue
 
             try:
-                message = await self._ws.recv()
-                result = json.loads(message)
-                self._process_result(result)
-            except websockets.exceptions.ConnectionClosed:
-                logger.info("连接已关闭")
-                self._ws = None  # 触发重连
-                continue
+                if self._conn_manager:
+                    message = await self._conn_manager.receive()
+                    if message:
+                        result = json.loads(message)
+                        self._process_result(result)
             except Exception as e:
                 if self._is_running:
                     logger.error(f"接收失败: {e}")
-                self._ws = None
                 await asyncio.sleep(1)  # 避免紧密循环
                 continue
 
