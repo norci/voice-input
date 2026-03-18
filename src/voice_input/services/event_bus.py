@@ -51,5 +51,5 @@ class EventBus(IEventBus):
         for callback in subscribers:
             try:
                 callback(event_type, data)
-            except Exception as e:
-                logger.error(f"Error in event callback for {event_type}: {e}")
+            except Exception:
+                logger.exception("Error in event callback for %s", event_type)

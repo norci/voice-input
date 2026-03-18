@@ -1,6 +1,6 @@
 """voice_input - Linux 桌面中文语音输入法
 
-此模块提供完整的语音输入功能，包括：
+此模块提供完整的语音输入功能,包括:
 - VoiceGUIWindow: GTK4 GUI 窗口
 - Config: 配置加载和管理
 

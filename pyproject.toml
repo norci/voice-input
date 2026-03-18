@@ -53,5 +53,5 @@ disable_error_code = ["misc", "union-attr"]
 ignore_missing_imports = true
 
 [project.scripts]
-voice-input = "voice_input.voice_gui:main"
+voice-input = "voice_input.gui.voice_app:main"
 voice-input-toggle = "voice_input.toggle:main"

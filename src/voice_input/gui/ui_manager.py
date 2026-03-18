@@ -1,14 +1,10 @@
 """UI Manager for Voice GUI."""
 
+from __future__ import annotations
+
 import logging
 
-import gi
-
-gi.require_version("Gdk", "4.0")
-gi.require_version("Gtk", "4.0")
-
-from gi.repository import GLib, Gtk
-
+from voice_input.gui._gtk_init import GLib, Gtk
 from voice_input.interfaces import VoiceState
 
 logger = logging.getLogger(__name__)
@@ -34,7 +30,7 @@ class UIManager:
     """UI manager - manages GUI interface."""
 
     def __init__(
-        self,
+        self: "UIManager",
         result_label: Gtk.Label,
         status_indicator: Gtk.Box,
         toggle_button: Gtk.Button,
@@ -44,32 +40,37 @@ class UIManager:
         self._toggle_button = toggle_button
         self._css_provider: Gtk.CssProvider | None = None
 
-    def update_state(self, state: VoiceState, error_message: str = "") -> None:
+    def update_state(self: "UIManager", state: VoiceState, error_message: str = "") -> None:
         """Update UI based on state.
 
         Args:
             state: Current state
             error_message: Error message (only used in ERROR state)
         """
+        logger.info(
+            f"UIManager.update_state() 被调用 - state={state}, error_message={error_message}"
+        )
+
         color = STATE_COLORS.get(state, "#808080")
         label = STATE_LABELS.get(state, "开始识别")
 
         if state == VoiceState.ERROR and error_message:
             label = f"错误: {error_message[:10]}"
 
-        logger.info(f"UIManager.update_state() - state={state.value}, label={label}")
+        if state == VoiceState.IDLE:
+            self.clear_result_display()
         GLib.idle_add(self._update_status_color, color)
         GLib.idle_add(self._toggle_button.set_label, label)
 
-    def update_result_display(self, text: str) -> None:
+    def update_result_display(self: "UIManager", text: str) -> None:
         """Update result display."""
-        GLib.idle_add(self._result_label.set_label, text)
+        self._result_label.set_label(text)
 
-    def clear_result_display(self) -> None:
+    def clear_result_display(self: "UIManager") -> None:
         """Clear result display."""
-        GLib.idle_add(self._result_label.set_label, "")
+        self._result_label.set_label("")
 
-    def _update_status_color(self, color: str) -> bool:
+    def _update_status_color(self: "UIManager", color: str) -> bool:
         """Update status indicator color."""
         if self._css_provider is None:
             self._css_provider = Gtk.CssProvider()

@@ -1,6 +1,6 @@
-"""ASR 配置模块。
+"""ASR 配置模块.
 
-定义识别结果类型和 ASR 客户端配置。
+定义识别结果类型和 ASR 客户端配置.
 """
 
 import logging
@@ -17,14 +17,14 @@ logger = logging.getLogger(__name__)
 
 
 class ResultType(Enum):
-    """识别结果类型。"""
+    """识别结果类型."""
 
-    INTERIM = "interim"  # 中间结果（实时）
+    INTERIM = "interim"  # 中间结果(实时)
     FINAL = "final"  # 最终结果
 
 
 class AsrResultDict(TypedDict):
-    """ASR 识别结果字典类型。"""
+    """ASR 识别结果字典类型."""
 
     text: str
     mode: str
@@ -33,7 +33,7 @@ class AsrResultDict(TypedDict):
 
 @dataclass
 class AsrClientConfig:
-    """ASR 客户端配置。"""
+    """ASR 客户端配置."""
 
     host: str = "127.0.0.1"
     port: int = 10095
@@ -48,7 +48,7 @@ class AsrClientConfig:
 
     @classmethod
     def from_config(cls, config: "Config") -> "AsrClientConfig":
-        """从配置创建 AsrClientConfig。"""
+        """从配置创建 AsrClientConfig."""
         return cls(
             host=config.asr.server_host,
             port=config.asr.server_port,

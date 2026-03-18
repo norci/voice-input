@@ -1,6 +1,6 @@
-"""配置文件加载器。
+"""配置文件加载器.
 
-使用 TOML 格式管理应用配置。
+使用 TOML 格式管理应用配置.
 """
 
 import logging
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class AsrConfig:
-    """ASR 语音识别配置。"""
+    """ASR 语音识别配置."""
 
     server_host: str = "127.0.0.1"
     server_port: int = 10095
@@ -28,7 +28,7 @@ class AsrConfig:
 
 @dataclass
 class AudioConfig:
-    """音频配置。"""
+    """音频配置."""
 
     gain: float = 0.5
     threshold: float = 0.01
@@ -36,12 +36,12 @@ class AudioConfig:
 
 @dataclass
 class WindowConfig:
-    """窗口配置。"""
+    """窗口配置."""
 
 
 @dataclass
 class Config:
-    """应用配置。"""
+    """应用配置."""
 
     asr: AsrConfig = field(default_factory=AsrConfig)
     audio: AudioConfig = field(default_factory=AudioConfig)
@@ -49,7 +49,7 @@ class Config:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Config":
-        """从字典创建配置。
+        """从字典创建配置.
 
         Args:
             data: 配置字典
@@ -77,7 +77,7 @@ class Config:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """转换为字典。
+        """转换为字典.
 
         Returns:
             配置字典
@@ -103,10 +103,10 @@ DEFAULT_CONFIG_PATH = Path("config/config.toml")
 
 
 def load_config(config_path: Path | None = None) -> Config:
-    """加载配置文件。
+    """加载配置文件.
 
     Args:
-        config_path: 配置文件路径，默认使用 config/config.toml
+        config_path: 配置文件路径,默认使用 config/config.toml
 
     Returns:
         Config 实例
@@ -118,10 +118,10 @@ def load_config(config_path: Path | None = None) -> Config:
     if config_path is None:
         config_path = DEFAULT_CONFIG_PATH
 
-    logger.info(f"加载配置文件：{config_path}")
+    logger.info(f"加载配置文件:{config_path}")
 
     if not config_path.exists():
-        logger.warning(f"配置文件不存在：{config_path}，使用默认配置")
+        logger.warning(f"配置文件不存在:{config_path},使用默认配置")
         return Config()
 
     try:
@@ -131,19 +131,19 @@ def load_config(config_path: Path | None = None) -> Config:
         config = Config.from_dict(data)
         logger.info("配置文件加载成功")
 
-    except tomli.TOMLDecodeError as e:
-        logger.error(f"TOML 解析失败：{e}")
+    except tomli.TOMLDecodeError:
+        logger.exception("TOML parse failed")
         raise
 
     return config
 
 
 def save_config(config: Config, config_path: Path | None = None) -> None:
-    """保存配置到文件。
+    """保存配置到文件.
 
     Args:
         config: Config 实例
-        config_path: 配置文件路径，默认使用 config/config.toml
+        config_path: 配置文件路径,默认使用 config/config.toml
 
     Raises:
         tomli_w.TOMLSerializationError: TOML 序列化失败
@@ -151,7 +151,7 @@ def save_config(config: Config, config_path: Path | None = None) -> None:
     if config_path is None:
         config_path = DEFAULT_CONFIG_PATH
 
-    logger.info(f"保存配置文件：{config_path}")
+    logger.info(f"保存配置文件:{config_path}")
 
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -161,16 +161,16 @@ def save_config(config: Config, config_path: Path | None = None) -> None:
 
         logger.info("配置文件保存成功")
 
-    except Exception as e:
-        logger.error(f"配置文件保存失败：{e}")
+    except Exception:
+        logger.exception("Config save failed")
         raise
 
 
 def create_default_config(config_path: Path | None = None) -> Config:
-    """创建默认配置文件。
+    """创建默认配置文件.
 
     Args:
-        config_path: 配置文件路径，默认使用 config/config.toml
+        config_path: 配置文件路径,默认使用 config/config.toml
 
     Returns:
         创建的 Config 实例
@@ -180,5 +180,5 @@ def create_default_config(config_path: Path | None = None) -> Config:
 
     config = Config()
     save_config(config, config_path)
-    logger.info(f"已创建默认配置文件：{config_path}")
+    logger.info(f"已创建默认配置文件:{config_path}")
     return config

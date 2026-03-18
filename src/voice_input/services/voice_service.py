@@ -4,16 +4,15 @@ import logging
 import threading
 
 from voice_input.asr_config import AsrClientConfig, ResultType
+from voice_input.audio_engine import AudioEngine
 from voice_input.interfaces import (
     ErrorCallback,
     IAudioEngine,
-    IServiceFactory,
     IVoiceService,
     ResultCallback,
     StateCallback,
     VoiceState,
 )
-from voice_input.services.service_factory import ServiceFactory
 
 logger = logging.getLogger(__name__)
 
@@ -21,20 +20,14 @@ logger = logging.getLogger(__name__)
 class VoiceService(IVoiceService):
     """Facade implementation for voice service."""
 
-    def __init__(self, config: AsrClientConfig, factory: IServiceFactory | None = None) -> None:
+    def __init__(self, config: AsrClientConfig) -> None:
         """Initialize voice service.
 
         Args:
             config: ASR client configuration
-            factory: Optional service factory (defaults to ServiceFactory)
         """
         self._config = config
-        self._factory = factory or ServiceFactory()
-
-        # Create sub-services using factory
-        self._audio_engine: IAudioEngine = self._factory.create_audio_engine(config)
-        # ConnectionManager is managed by AudioEngine, but we might want to expose it if needed
-        # For now, VoiceService delegates to AudioEngine as per original VoiceManager logic
+        self._audio_engine: IAudioEngine = AudioEngine(config)
 
         # State management
         self._state = VoiceState.IDLE
@@ -44,6 +37,9 @@ class VoiceService(IVoiceService):
         self._result_callback: ResultCallback | None = None
         self._error_callback: ErrorCallback | None = None
         self._state_callback: StateCallback | None = None
+
+        # Timer lock (initialized here to avoid hasattr checks)
+        self._timer_lock = threading.Lock()
 
         # Wire up audio engine callbacks
         self._audio_engine.set_result_callback(self._on_engine_result)
@@ -75,65 +71,60 @@ class VoiceService(IVoiceService):
     def start(self) -> bool:
         """Start voice recognition."""
         if self._state not in (VoiceState.IDLE, VoiceState.ERROR):
-            logger.warning(f"[状态转换] 当前状态 {self._state}，无法开始")
+            logger.warning("Cannot start from state: %s", self._state)
             return False
 
         self._error_message = ""
         self._state = VoiceState.IDLE
-        logger.info("[状态转换] VoiceService.start() - 正在启动...")
+        logger.info("VoiceService starting")
 
         ok: bool = self._audio_engine.start()
         if ok:
             self._state = VoiceState.RECORDING
-            logger.info("[状态转换] IDLE -> RECORDING")
+            logger.info("State: IDLE -> RECORDING")
             self._notify_state_change()
         else:
-            logger.error("[状态转换] VoiceService.start() - 启动音频引擎失败")
+            logger.error("Failed to start audio engine")
 
         return ok
 
     def stop(self) -> None:
         """Stop voice recognition."""
         if self._state != VoiceState.RECORDING:
-            logger.warning(f"[状态转换] 当前状态 {self._state}，无法停止")
+            logger.warning("Cannot stop from state: %s", self._state)
             return
 
-        logger.info("[状态转换] VoiceService.stop() - 正在停止录音发送...")
+        logger.info("VoiceService stopping - recording and sending")
         self._audio_engine.stop_sending()
         self._state = VoiceState.POST_PROCESSING
-        logger.info("[状态转换] RECORDING -> POST_PROCESSING")
+        logger.info("State: RECORDING -> POST_PROCESSING")
         self._notify_state_change()
 
-        # Note: Timeout logic from original VoiceManager is omitted here as it's a business logic
-        # specific to the application flow, but VoiceService could handle it or delegate to a timer.
-        # For now, keeping it simple as per typical Facade pattern (exposing subsystem behavior).
-        # The original VoiceManager had a 3s timeout to return to IDLE.
-        # We will rely on the application layer (GUI) or a dedicated timer if needed,
-        # or implement it here if it's core to the service.
-        # Let's implement the timeout here to match original behavior.
-
         def timeout_callback() -> None:
-            if self._state == VoiceState.POST_PROCESSING:
-                logger.info("[状态转换] POST_PROCESSING 超时，自动返回 IDLE")
-                self._state = VoiceState.IDLE
-                self._audio_engine.stop()
-                self._notify_state_change()
+            # 使用锁保护 _audio_engine 访问
+            with self._timer_lock:
+                if self._state == VoiceState.POST_PROCESSING and self._audio_engine is not None:
+                    logger.info("POST_PROCESSING timeout, returning to IDLE")
+                    self._state = VoiceState.IDLE
+                    self._audio_engine.stop()
+                    self._notify_state_change()
 
-        timer = threading.Timer(3.0, timeout_callback)
-        timer.daemon = True
-        timer.start()
-        logger.info("[状态转换] 已启动 3 秒超时定时器")
+        with self._timer_lock:
+            self._post_process_timer = threading.Timer(3.0, timeout_callback)
+            self._post_process_timer.daemon = True
+            self._post_process_timer.start()
+        logger.info("Started 3s timeout timer")
 
     def reset(self) -> None:
         """Reset service state."""
-        logger.info("[状态转换] VoiceService.reset() - 正在重置...")
+        logger.info("VoiceService resetting")
 
-        if self._audio_engine:
-            self._audio_engine.stop()
-
-        self._state = VoiceState.IDLE
-        self._error_message = ""
-        logger.info("[状态转换] -> IDLE (通过 reset)")
+        with self._timer_lock:
+            if self._audio_engine:
+                self._audio_engine.stop()
+            self._state = VoiceState.IDLE
+            self._error_message = ""
+        logger.info("State -> IDLE via reset")
         self._notify_state_change()
 
     def _notify_state_change(self) -> None:
@@ -143,15 +134,15 @@ class VoiceService(IVoiceService):
 
     def _on_engine_result(self, text: str, result_type: ResultType) -> None:
         """Audio engine result callback."""
-        logger.debug(f"[结果] {result_type.value}: {text}")
+        logger.debug("Result: %s: %s", result_type.value, text)
 
         if self._state == VoiceState.RECONNECTING:
-            logger.info("[状态转换] 收到识别结果，连接已恢复 -> RECORDING")
+            logger.info("Got result while reconnecting -> RECORDING")
             self._state = VoiceState.RECORDING
             self._notify_state_change()
 
         if result_type == ResultType.FINAL and self._state == VoiceState.POST_PROCESSING:
-            logger.info("[状态转换] 收到最终结果 -> IDLE")
+            logger.info("Got final result -> IDLE")
             self._state = VoiceState.IDLE
             self._audio_engine.stop()
             self._notify_state_change()
@@ -161,7 +152,7 @@ class VoiceService(IVoiceService):
 
     def _on_engine_error(self, error_type: str, message: str) -> None:
         """Audio engine error callback."""
-        logger.error(f"[错误] {error_type}: {message}")
+        logger.error("Engine error: %s: %s", error_type, message)
         self._state = VoiceState.ERROR
         self._error_message = message
 
@@ -170,8 +161,8 @@ class VoiceService(IVoiceService):
 
     def _on_reconnecting(self, attempt: int) -> None:
         """Reconnecting callback."""
-        logger.info(f"[重连] 尝试连接 (尝试 {attempt})...")
+        logger.info("Reconnecting (attempt %d)", attempt)
         if self._state in (VoiceState.RECORDING, VoiceState.POST_PROCESSING):
-            logger.info("[状态转换] -> RECONNECTING")
+            logger.info("State -> RECONNECTING")
             self._state = VoiceState.RECONNECTING
             self._notify_state_change()

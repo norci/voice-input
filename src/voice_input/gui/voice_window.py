@@ -1,18 +1,13 @@
 """Voice GUI Window."""
 
+from __future__ import annotations
+
 import logging
-import os
 import time
-
-import gi
-
-gi.require_version("Gdk", "4.0")
-gi.require_version("Gtk", "4.0")
-
-from gi.repository import GLib, Gtk
 
 from voice_input.asr_config import ResultType
 from voice_input.config_loader import Config
+from voice_input.gui._gtk_init import GLib, Gtk
 from voice_input.gui.text_injector import TextInjector
 from voice_input.gui.ui_manager import UIManager
 from voice_input.interfaces import IVoiceService, VoiceState
@@ -94,12 +89,12 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
             self._result_label, self._status_indicator, self._toggle_button
         )
 
-    def _on_toggle_clicked(self, button: Gtk.Button | None) -> None:
+    def _on_toggle_clicked(self: "VoiceGUIWindow", _button: Gtk.Button | None) -> None:
         """Toggle button click event (with debounce)."""
-        logger.info("按钮被点击!")
+        logger.info("Toggle clicked")
         now = int(time.time() * 1000)
         if now - self._last_click_time < self.CLICK_DEBOUNCE_MS:
-            logger.debug("点击过于频繁，忽略")
+            logger.debug("点击过于频繁,忽略")
             return
         self._last_click_time = now
 
@@ -117,24 +112,40 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
             logger.info("调用 reset()")
             self._voice_service.reset()
         elif state == VoiceState.RECONNECTING:
-            logger.info("重连中，不处理")
+            logger.info("重连中,不处理")
         elif state == VoiceState.ERROR:
             logger.info("调用 reset()")
             self._voice_service.reset()
 
-    def _on_quit_clicked(self, button: Gtk.Button) -> None:
+    def _on_quit_clicked(self: "VoiceGUIWindow", _button: Gtk.Button) -> None:
         """Quit button click event."""
         self.quit_app()
 
-    def _on_result(self, text: str, result_type: ResultType) -> None:
+    def _on_result(self: "VoiceGUIWindow", text: str, result_type: ResultType) -> None:
         """Recognition result callback."""
-        GLib.idle_add(self._ui_manager.update_result_display, text)
+        if not text:
+            return
+
+        state = self._voice_service.state
 
         if result_type == ResultType.FINAL:
             GLib.idle_add(self._text_injector.inject, text)
+            GLib.idle_add(self._ui_manager.update_result_display, text)
+            return
 
-        state = self._voice_service.state
-        GLib.idle_add(self._ui_manager.update_state, state)
+        # For intermediate results
+        if state == VoiceState.IDLE:
+            return
+
+        GLib.idle_add(self._ui_manager.update_result_display, text)
+
+        # For intermediate results
+        if state == VoiceState.IDLE:
+            logger.info("IDLE state, skipping result display")
+            return
+
+        logger.info(f"Calling update_result_display for text: {text[:20] if text else 'EMPTY'}...")
+        GLib.idle_add(self._ui_manager.update_result_display, text)
 
     def _on_error(self, error_type: str, message: str) -> None:
         """Error callback."""
@@ -147,7 +158,7 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
             self._voice_service.error_message,
         )
 
-    def _on_state_changed(self, state: VoiceState, error_message: str) -> None:
+    def _on_state_changed(self: "VoiceGUIWindow", state: VoiceState, error_message: str) -> None:
         """State change callback."""
         logger.info(f"_on_state_changed: {state.value}")
         GLib.idle_add(self._ui_manager.update_state, state, error_message)
@@ -168,7 +179,6 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
             app = self.get_application()
             if app:
                 app.quit()
-            os._exit(0)
         except Exception:
-            os._exit(1)
+            logger.exception("退出时出错")
         return False

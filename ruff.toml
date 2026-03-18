@@ -21,29 +21,6 @@ exclude = [
 
 [lint]
 # 忽略规则
-ignore = [
-    "N802",    # 忽略函数名小写警告
-    "N803",    # 忽略参数名小写警告
-    "C901",    # 忽略复杂函数警告
-    "RUF002",  # 忽略文档字符串中的歧义字符（中文标点）
-    "RUF001",  # 忽略中文字符中的歧义字符
-    "RUF003",  # 忽略注释中的歧义字符
-    "TRY400",  # 允许使用 logging.error 而不是 exception
-    "ARG002",  # 允许未使用的参数（回调函数需要）
-    "PLR2004", # 允许魔法值
-    "ANN401",  # 允许 Any 类型（GTK 需要）
-    "E402",    # 允许模块级导入在文件顶部之后（GTK 需要）
-    "PLR0911", # 允许函数有多个 return 语句（防误触发逻辑需要）
-    "PLR0913", # 允许函数参数过多（现有代码需要）
-    "ANN101",  # 忽略 self 类型注解（Python 3.11+ 不需要）
-    "ANN102",  # 忽略 cls 类型注解
-    "PLR0912", # 忽略分支过多警告（状态机逻辑需要）
-    "PLR0915", # 忽略语句过多警告（复杂功能需要）
-    "EM101",   # 允许异常消息使用字符串（中文消息需要）
-    "PLW0603", # 允许全局变量更新（延迟导入需要）
-    "N806",    # 允许函数内变量大写（类引用需要）
-    "PLC0415", # 允许函数内导入（延迟加载需要）
-]
 
 # 选择规则
 select = [
@@ -119,6 +96,9 @@ unfixable = []
 "src/voice_input/audio/vad.py" = ["UP038"]
 "src/voice_input/audio/__init__.py" = ["PLC"]  # 延迟导入避免循环依赖
 "src/voice_input/utils/error_handler.py" = ["PLW0603", "PLC"]  # global 在单例模式中需要；延迟导入避免循环依赖
+"src/voice_input/gui/*.py" = ["E402"]  # GTK gi.require_version() 必须在 import 之前
+"src/voice_input/voice_gui.py" = ["E402"]  # GTK gi.require_version() 必须在 import 之前
+"src/**/*_init.py" = ["F401"]  # _gtk_init.py 等导出模块不需要检查未使用导入
 
 # isort 配置
 [lint.isort]

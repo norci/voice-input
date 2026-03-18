@@ -23,8 +23,9 @@
 
 测试 GUI 时，禁止命令用户操作，必须用以下方式：
 
-1. 启动 FunASR 服务器：
+1. 先检查 FunASR 服务器是否在运行，如果没有就启动它：
    ```bash
+   cd /home/josephx/code/voice-input
    cd FunASR/runtime/python/websocket
    uv run funasr_wss_server.py --host 127.0.0.1 --port 10095 &
    ```
@@ -44,28 +45,17 @@
 
 4. 查看日志：
    ```bash
-   grep "\[状态转换\]" /tmp/voice_gui.log
+   cat /tmp/voice_gui.log
    ```
 
 ## 配置
 
-- 超时时间: 3 秒
 - Socket 路径: `/run/user/1000/voice-input.sock`
 - 日志文件: `/tmp/voice_gui.log`
-
-## 模块架构
-
-- **socket_manager.py**: Socket 服务器管理（自动清理残留文件）
-- **voice_manager.py**: 状态控制器
-- **audio_engine.py**: 音频处理器
-- **voice_gui.py**: GUI 界面
-- **connection_manager.py**: WebSocket 连接管理
-- **audio_recorder.py**: 音频录制
 
 ### 故障排除
 
 - `ModuleNotFoundError: No module named 'gi'` → `uv add PyGObject`
-- `command not found: uv` → `pip install uv`
 
 ### 参考
 
