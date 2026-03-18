@@ -1,6 +1,7 @@
 """IVoiceService implementation (Facade)."""
 
 import logging
+import threading
 
 from voice_input.asr_config import AsrClientConfig, ResultType
 from voice_input.interfaces import (
@@ -110,7 +111,6 @@ class VoiceService(IVoiceService):
         # We will rely on the application layer (GUI) or a dedicated timer if needed,
         # or implement it here if it's core to the service.
         # Let's implement the timeout here to match original behavior.
-        import threading
 
         def timeout_callback() -> None:
             if self._state == VoiceState.POST_PROCESSING:
