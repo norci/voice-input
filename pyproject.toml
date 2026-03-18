@@ -38,16 +38,6 @@ dev = [
 line-length = 100
 target-version = "py311"
 
-[tool.ruff.lint]
-# 忽略规则
-ignore = [
-    "PLR0913",  # 允许参数过多
-    "PLW0603",  # 允许全局变量更新
-    "N806",     # 允许函数内变量大写
-    "PLC0415",  # 允许函数内导入
-    "E402",     # 允许模块级导入在文件顶部之后（GTK 需要）
-]
-
 [[tool.uv.index]]
 url = "https://mirrors.aliyun.com/pypi/simple/,/nhttps://mirrors.cloud.tencent.com/pypi/simple/,/nhttps://mirrors.huaweicloud.com/repository/pypi/simple//n"
 
