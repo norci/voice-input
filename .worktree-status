@@ -1,0 +1,21 @@
+# Worktree 状态
+
+- **Worktree**: voice-input-state
+- **分支**: feature-state-pattern
+- **负责人**: Agent-State
+- **开始时间**: 2026-03-18
+- **预计完成**: 2026-03-19
+- **当前状态**: 进行中
+- **完成度**: 0%
+
+## 任务清单
+
+- [ ] 定义状态类 (IdleState, RecordingState, etc.)
+- [ ] 实现 `StateManager` 类 (IStateManager)
+- [ ] 重构 `VoiceManager` 使用 `StateManager`
+- [ ] 确保状态转换逻辑正确
+- [ ] 运行测试
+
+## 问题记录
+
+(无)
