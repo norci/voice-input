@@ -139,11 +139,6 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
 
         GLib.idle_add(self._ui_manager.update_result_display, text)
 
-        # For intermediate results
-        if state == VoiceState.IDLE:
-            logger.info("IDLE state, skipping result display")
-            return
-
         logger.info(f"Calling update_result_display for text: {text[:20] if text else 'EMPTY'}...")
         GLib.idle_add(self._ui_manager.update_result_display, text)
 
