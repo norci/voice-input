@@ -1,0 +1,24 @@
+# Worktree 状态
+
+- **Worktree**: voice-input-cleanup
+- **分支**: feature-cleanup
+- **负责人**: Agent-Cleanup
+- **开始时间**: 2026-03-18
+- **预计完成**: 2026-03-18
+- **当前状态**: 进行中
+- **完成度**: 100%
+
+## 任务清单
+
+- [x] 移除 `ConnectionManager.connect_sync()` 方法
+- [x] 移除 `ConnectionManager.send_audio()` 方法
+- [x] 移除 `ConnectionManager.receive_result()` 方法
+- [x] 移除 `ConnectionManager.create_connection_manager()` 函数
+- [x] 移除 `AudioSource` 协议
+- [x] 移除未使用的 `AudioChunk` 导入
+- [x] 删除 `tests/unit/test_voice_recorder.py`
+- [x] 运行测试确保无回归
+
+## 问题记录
+
+(无)

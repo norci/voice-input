@@ -11,12 +11,9 @@ import threading
 from collections.abc import Callable
 from contextlib import suppress
 from enum import Enum
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import websockets
-
-from voice_input.asr_config import AsrResultDict
-from voice_input.audio_recorder import AudioChunk
 
 if TYPE_CHECKING:
     from voice_input.asr_config import AsrClientConfig
@@ -56,15 +53,6 @@ class ConnectionManager:
         self._ssl_context.verify_mode = ssl.CERT_NONE
 
         self._uri = f"wss://{self._config.host}:{self._config.port}"
-
-    def connect_sync(self) -> None:
-        """同步连接（在事件循环中执行）。"""
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(self.connect())
-        finally:
-            loop.close()
 
     async def connect_with_retry(
         self, on_reconnecting: "Callable[[int], None] | None" = None
@@ -163,51 +151,3 @@ class ConnectionManager:
             with suppress(Exception):
                 await ws_to_close.close()
             logger.info("WebSocket 连接已断开")
-
-    async def send_audio(self, chunk: AudioChunk) -> None:
-        """发送音频数据。
-
-        Args:
-            chunk: 音频数据块
-        """
-        with self._lock:
-            if self._state != ConnectionState.CONNECTED or not self._ws:
-                raise ConnectionError("未连接")
-            ws = self._ws
-
-        await ws.send(chunk.data)
-
-    async def receive_result(self) -> AsrResultDict | None:
-        """接收识别结果。
-
-        Returns:
-            识别结果字典，无结果时返回 None
-        """
-        with self._lock:
-            if self._state != ConnectionState.CONNECTED or not self._ws:
-                raise ConnectionError("未连接")
-            ws = self._ws
-
-        try:
-            message = await ws.recv()
-            result = json.loads(message)
-            if not isinstance(result, dict):
-                return None
-            return cast(
-                AsrResultDict,
-                {
-                    "text": result.get("text", ""),
-                    "mode": result.get("mode", ""),
-                    "is_final": result.get("is_final", False),
-                },
-            )
-        except websockets.exceptions.ConnectionClosed:
-            return None
-        except Exception as e:
-            logger.error(f"接收结果出错: {e}")
-            return None
-
-
-def create_connection_manager(config: "AsrClientConfig") -> ConnectionManager:
-    """创建连接管理器。"""
-    return ConnectionManager(config)

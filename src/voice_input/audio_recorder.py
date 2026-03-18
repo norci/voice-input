@@ -9,7 +9,6 @@ import threading
 import time
 from dataclasses import dataclass
 from threading import Thread
-from typing import Protocol
 
 import numpy as np
 import sounddevice as sd
@@ -23,16 +22,6 @@ class AudioChunk:
 
     data: bytes  # PCM 16-bit 格式
     timestamp: float  # 采集时间戳
-
-
-class AudioSource(Protocol):
-    """音频源协议。"""
-
-    def start(self) -> None:
-        ...
-
-    def stop(self) -> None:
-        ...
 
 
 class AudioRecorder:
