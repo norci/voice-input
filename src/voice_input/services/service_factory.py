@@ -12,6 +12,17 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_VoiceService = None
+
+
+def _get_voice_service() -> Any:
+    global _VoiceService
+    if _VoiceService is None:
+        from voice_input.services.voice_service import VoiceService
+
+        _VoiceService = VoiceService
+    return _VoiceService
+
 
 class ServiceFactory(IServiceFactory):
     """Service factory implementation."""
@@ -25,9 +36,7 @@ class ServiceFactory(IServiceFactory):
         Returns:
             VoiceService instance
         """
-        # Lazy import to avoid circular dependency
-        from voice_input.services.voice_service import VoiceService
-
+        VoiceService = _get_voice_service()
         logger.info("Creating VoiceService")
         return VoiceService(config)
 

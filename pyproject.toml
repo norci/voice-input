@@ -40,8 +40,9 @@ target-version = "py311"
 
 [tool.ruff.lint]
 # 忽略参数过多的警告（现有代码需要）
-# 忽略循环依赖的 lazy import 警告
-ignore = ["PLR0913", "PLC0415"]
+ignore = ["PLR0913"]
+
+[tool.ruff.lint.extend]
 
 [[tool.uv.index]]
 url = "https://mirrors.aliyun.com/pypi/simple/,/nhttps://mirrors.cloud.tencent.com/pypi/simple/,/nhttps://mirrors.huaweicloud.com/repository/pypi/simple//n"
