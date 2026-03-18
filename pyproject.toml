@@ -18,6 +18,7 @@ dependencies = [
     "tomli-w>=1.0",
     "numpy>=1.24",
     "websockets>=16.0",
+    "psutil>=7.2.2",
 ]
 
 [build-system]

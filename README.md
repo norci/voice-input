@@ -137,6 +137,27 @@ ruff check src/
 mypy src/
 ```
 
+## GUI 测试
+
+测试 GUI 时，需要启动两个独立的进程：
+
+```bash
+# 1. 启动 FunASR 服务器（如果未运行）
+cd FunASR/runtime/python/websocket
+uv run funasr_wss_server.py --host 127.0.0.1 --port 10095 &
+
+# 2. 后台启动 GUI（不阻塞终端）
+uv run voice-input &
+
+# 3. 通过命令触发录音（模拟快捷键）
+uv run voice-input-toggle
+```
+
+查看日志：
+```bash
+tail -f /tmp/voice_gui.log
+```
+
 ## 项目结构
 
 ```

@@ -3,8 +3,6 @@
 import subprocess
 from pathlib import Path
 
-import pytest
-
 
 class TestRuffConfiguration:
     """Ruff 配置测试"""
@@ -23,7 +21,6 @@ class TestRuffConfiguration:
         content = ruff_config.read_text()
         assert 'target-version = "py311"' in content, "ruff 配置应指定 Python 3.11 目标版本"
 
-    @pytest.mark.skip(reason="Ruff check may fail due to external code issues")
     def test_ruff_check_passes(self):
         """验证 ruff 代码检查通过"""
         project_root = Path(__file__).parent.parent.parent

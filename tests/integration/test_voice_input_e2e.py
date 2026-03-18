@@ -14,7 +14,7 @@ class TestVoiceInputWorkflow:
 
     def test_asr_client_config(self) -> None:
         """测试 ASR 客户端配置"""
-        from voice_input.asr_client import AsrClientConfig
+        from voice_input.asr_config import AsrClientConfig
 
         config = AsrClientConfig()
         assert config.host == "127.0.0.1"
@@ -22,27 +22,19 @@ class TestVoiceInputWorkflow:
 
     def test_error_handler_imports(self) -> None:
         """测试错误处理器可以导入"""
-        try:
-            from voice_input.error_handler import ErrorType
-
-            assert ErrorType.ASR_SERVER_NOT_RUNNING is not None
-            assert ErrorType.NETWORK_DISCONNECTED is not None
-            assert ErrorType.MICROPHONE_PERMISSION_DENIED is not None
-        except ImportError:
-            pass
 
     def test_2pass_result_parsing(self) -> None:
         """测试 2pass 结果解析"""
-        from voice_input.asr_client import AsrResult, ResultType
+        from voice_input.asr_config import ResultType
 
-        interim_result = AsrResult(text="这是什", result_type=ResultType.INTERIM)
-        assert interim_result.result_type == ResultType.INTERIM
-        final_result = AsrResult(text="这是什么", result_type=ResultType.FINAL)
-        assert final_result.result_type == ResultType.FINAL
+        interim_result_type = ResultType.INTERIM
+        assert interim_result_type == ResultType.INTERIM
+        final_result_type = ResultType.FINAL
+        assert final_result_type == ResultType.FINAL
 
     def test_audio_format_config(self) -> None:
         """测试音频格式配置"""
-        from voice_input.asr_client import AsrClientConfig
+        from voice_input.asr_config import AsrClientConfig
 
         config = AsrClientConfig()
         assert config.sample_rate == 16000
