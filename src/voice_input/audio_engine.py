@@ -215,12 +215,26 @@ class AudioEngine:
         logger.debug("发送循环结束")
 
     async def _receive_loop(self) -> None:
-        """接收循环 - 始终运行直到连接断开或完全停止"""
+        """接收循环 - 始终运行直到完全停止，自动重连"""
         logger.debug("接收循环启动")
         while self._is_running:
             if not self._ws:
-                await asyncio.sleep(0.1)
-                continue
+                # 尝试重连
+                try:
+                    logger.info("连接已断开，尝试重连...")
+                    if self._conn_manager:
+                        self._ws = await self._conn_manager.connect_with_retry(
+                            self._on_reconnecting
+                        )
+                        logger.info("重连成功")
+                    else:
+                        logger.warning("ConnectionManager is None, stopping reconnection attempts")
+                        break
+                except Exception as e:
+                    if self._is_running:
+                        logger.warning(f"重连失败: {e}")
+                        await asyncio.sleep(3)
+                    continue
 
             try:
                 message = await self._ws.recv()
@@ -228,17 +242,14 @@ class AudioEngine:
                 self._process_result(result)
             except websockets.exceptions.ConnectionClosed:
                 logger.info("连接已关闭")
-                break
+                self._ws = None  # 触发重连
+                continue
             except Exception as e:
                 if self._is_running:
                     logger.error(f"接收失败: {e}")
-                break
-
-        # 连接断开，如果还在运行则触发重连
-        if self._is_running:
-            logger.info("连接断开，尝试重连...")
-            self._ws = None
-            await self._attempt_reconnect()
+                self._ws = None
+                await asyncio.sleep(1)  # 避免紧密循环
+                continue
 
         logger.debug("接收循环结束")
 
@@ -260,26 +271,3 @@ class AudioEngine:
 
         if self._result_callback:
             self._result_callback(text, result_type)
-
-    async def _attempt_reconnect(self) -> None:
-        """尝试重连。"""
-        attempt = 0
-        while self._is_running:
-            attempt += 1
-            if self._reconnecting_callback:
-                self._reconnecting_callback(attempt)
-
-            try:
-                logger.info(f"尝试重连 ({attempt})...")
-                self._ws = await self._conn_manager.connect_with_retry(self._on_reconnecting)
-                logger.info("重连成功")
-                # 重连成功后，重新启动发送任务
-                self._send_task = asyncio.create_task(self._send_loop())
-                self._receive_task = asyncio.create_task(self._receive_loop())
-                return  # noqa: TRY300
-            except Exception as e:
-                logger.warning(f"重连失败: {e}")
-
-            await asyncio.sleep(3)
-
-        logger.info("停止重连，因为已停止运行")
