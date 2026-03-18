@@ -42,8 +42,6 @@ target-version = "py311"
 # 忽略参数过多的警告（现有代码需要）
 ignore = ["PLR0913"]
 
-[tool.ruff.lint.extend]
-
 [[tool.uv.index]]
 url = "https://mirrors.aliyun.com/pypi/simple/,/nhttps://mirrors.cloud.tencent.com/pypi/simple/,/nhttps://mirrors.huaweicloud.com/repository/pypi/simple//n"
 

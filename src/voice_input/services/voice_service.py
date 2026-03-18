@@ -174,3 +174,4 @@ class VoiceService(IVoiceService):
         if self._state in (VoiceState.RECORDING, VoiceState.POST_PROCESSING):
             logger.info("[状态转换] -> RECONNECTING")
             self._state = VoiceState.RECONNECTING
+            self._notify_state_change()

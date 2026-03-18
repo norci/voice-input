@@ -176,7 +176,7 @@ class ConnectionManager:
         """
         with self._lock:
             if self._state != ConnectionState.CONNECTED or not self._ws:
-                raise ConnectionError("未连接")
+                return None
             ws = self._ws
 
         try:
