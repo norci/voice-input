@@ -6,10 +6,13 @@ Usage:
     voice-input-toggle
 """
 
+import logging
 import os
 import socket
 import sys
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # 使用 XDG_RUNTIME_DIR
 RUNTIME_DIR = os.environ.get("XDG_RUNTIME_DIR")
@@ -18,24 +21,28 @@ if not RUNTIME_DIR or not Path(RUNTIME_DIR).is_dir():
 SOCKET_PATH = f"{RUNTIME_DIR}/voice-input.sock"
 
 
-def send_command(cmd: str) -> int:
-    """Send command via Unix Socket."""
+def send_command(cmd: str) -> bool:
+    """向 Socket 发送命令.
+
+    Args:
+        cmd: 命令字符串
+
+    Returns:
+        是否发送成功
+    """
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     try:
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(3.0)
         sock.connect(SOCKET_PATH)
-        sock.send(cmd.encode())
-        sock.close()
-    except FileNotFoundError:
-        return 1
+        sock.sendall(cmd.encode())
     except ConnectionRefusedError:
-        return 1
-    except TimeoutError:
-        return 1
-    except Exception:
-        return 1
-    else:
-        return 0
+        logger.warning("Socket 连接被拒绝: %s", SOCKET_PATH)
+        return False
+    except OSError:
+        logger.exception("Socket 通信错误")
+        return False
+    finally:
+        sock.close()
+    return True
 
 
 def toggle() -> int:

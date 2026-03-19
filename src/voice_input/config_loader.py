@@ -48,7 +48,7 @@ class Config:
     window: WindowConfig = field(default_factory=WindowConfig)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "Config":
+    def from_dict(cls: type["Config"], data: dict[str, Any]) -> "Config":
         """从字典创建配置.
 
         Args:
@@ -76,7 +76,7 @@ class Config:
             window=WindowConfig(),
         )
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self: "Config") -> dict[str, Any]:
         """转换为字典.
 
         Returns:
@@ -118,10 +118,10 @@ def load_config(config_path: Path | None = None) -> Config:
     if config_path is None:
         config_path = DEFAULT_CONFIG_PATH
 
-    logger.info(f"加载配置文件:{config_path}")
+    logger.info("Loading config file: %s", config_path)
 
     if not config_path.exists():
-        logger.warning(f"配置文件不存在:{config_path},使用默认配置")
+        logger.warning("Config file not found: %s, using defaults", config_path)
         return Config()
 
     try:
@@ -151,7 +151,7 @@ def save_config(config: Config, config_path: Path | None = None) -> None:
     if config_path is None:
         config_path = DEFAULT_CONFIG_PATH
 
-    logger.info(f"保存配置文件:{config_path}")
+    logger.info("Saving config file: %s", config_path)
 
     config_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -180,5 +180,5 @@ def create_default_config(config_path: Path | None = None) -> Config:
 
     config = Config()
     save_config(config, config_path)
-    logger.info(f"已创建默认配置文件:{config_path}")
+    logger.info("Created default config file: %s", config_path)
     return config

@@ -30,7 +30,7 @@ class UIManager:
     """UI manager - manages GUI interface."""
 
     def __init__(
-        self: "UIManager",
+        self: UIManager,
         result_label: Gtk.Label,
         status_indicator: Gtk.Box,
         toggle_button: Gtk.Button,
@@ -40,7 +40,7 @@ class UIManager:
         self._toggle_button = toggle_button
         self._css_provider: Gtk.CssProvider | None = None
 
-    def update_state(self: "UIManager", state: VoiceState, error_message: str = "") -> None:
+    def update_state(self: UIManager, state: VoiceState, error_message: str = "") -> None:
         """Update UI based on state.
 
         Args:
@@ -62,15 +62,15 @@ class UIManager:
         GLib.idle_add(self._update_status_color, color)
         GLib.idle_add(self._toggle_button.set_label, label)
 
-    def update_result_display(self: "UIManager", text: str) -> None:
+    def update_result_display(self: UIManager, text: str) -> None:
         """Update result display."""
         self._result_label.set_label(text)
 
-    def clear_result_display(self: "UIManager") -> None:
+    def clear_result_display(self: UIManager) -> None:
         """Clear result display."""
         self._result_label.set_label("")
 
-    def _update_status_color(self: "UIManager", color: str) -> bool:
+    def _update_status_color(self: UIManager, color: str) -> bool:
         """Update status indicator color."""
         if self._css_provider is None:
             self._css_provider = Gtk.CssProvider()

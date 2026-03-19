@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class State:
     """Base state class."""
 
-    def __init__(self, context: StateManager) -> None:
+    def __init__(self: State, context: StateManager) -> None:
         """Initialize state.
 
         Args:
@@ -24,67 +24,65 @@ class State:
         """
         self._context = context
 
-    def can_start(self) -> bool:
+    def can_start(self: State) -> bool:
         """Check if can start."""
         return False
 
-    def can_stop(self) -> bool:
+    def can_stop(self: State) -> bool:
         """Check if can stop."""
         return False
 
-    def on_enter(self, error: str = "") -> None:
+    def on_enter(self: State, error: str = "") -> None:
         """Callback when entering state."""
 
-    def on_exit(self) -> None:
+    def on_exit(self: State) -> None:
         """Callback when exiting state."""
 
-    def handle_result(self, text: str, result_type: object) -> None:
+    def handle_result(self: State, text: str, result_type: object) -> None:
         """Handle recognition result."""
 
-    def handle_error(self, error_type: str, message: str) -> None:
+    def handle_error(self: State, error_type: str, message: str) -> None:
         """Handle error."""
 
-    def handle_reconnecting(self, attempt: int) -> None:
+    def handle_reconnecting(self: State, attempt: int) -> None:
         """Handle reconnecting event."""
 
 
 class IdleState(State):
     """Idle state."""
 
-    def can_start(self) -> bool:
+    def can_start(self: IdleState) -> bool:
         return True
 
-    def on_enter(self, error: str = "") -> None:
-        if error:
-            self._context._error_message = error
-        else:
-            self._context._error_message = ""
+    def on_enter(self: IdleState, error: str = "") -> None:
+        self._context.error_message = error
 
 
 class RecordingState(State):
     """Recording state."""
 
-    def can_stop(self) -> bool:
+    def can_stop(self: RecordingState) -> bool:
         return True
 
 
 class PostProcessingState(State):
     """Post-processing state."""
 
-    def handle_result(self, _text: str, result_type: object) -> None:
+    def handle_result(self: PostProcessingState, _text: str, result_type: object) -> None:
         """Handle recognition result."""
         if hasattr(result_type, "value") and result_type.value == "final":
             self._context.transition_to(VoiceState.IDLE)
 
-    def on_exit(self) -> None:
+    def on_exit(self: PostProcessingState) -> None:
         """Stop audio engine when exiting."""
-        self._context._audio_engine.stop()
+        if self._context._audio_engine is not None:
+            self._context._audio_engine.stop()
 
 
 class ReconnectingState(State):
     """Reconnecting state."""
 
-    def handle_result(self, _text: str, _result_type: object) -> None:
+    def handle_result(self: ReconnectingState, _text: str, _result_type: object) -> None:
         """Handle result - connection restored."""
         self._context.transition_to(VoiceState.RECORDING)
 
@@ -92,8 +90,8 @@ class ReconnectingState(State):
 class ErrorState(State):
     """Error state."""
 
-    def on_enter(self, error: str = "") -> None:
-        self._context._error_message = error
+    def on_enter(self: ErrorState, error: str = "") -> None:
+        self._context.error_message = error
 
 
 class StateManager(IStateManager):
@@ -102,7 +100,7 @@ class StateManager(IStateManager):
     Manages state transitions and delegates to current state.
     """
 
-    def __init__(self, audio_engine: IAudioEngine) -> None:
+    def __init__(self: StateManager, audio_engine: IAudioEngine) -> None:
         """Initialize state manager.
 
         Args:
@@ -125,16 +123,21 @@ class StateManager(IStateManager):
         self._current_state: State = self._states[VoiceState.IDLE]
 
     @property
-    def state(self) -> VoiceState:
+    def state(self: StateManager) -> VoiceState:
         """Get current state."""
         return self._current_state_enum
 
     @property
-    def error_message(self) -> str:
+    def error_message(self: StateManager) -> str:
         """Get error message."""
         return self._error_message
 
-    def transition_to(self, new_state: VoiceState, error: str = "") -> None:
+    @error_message.setter
+    def error_message(self: StateManager, value: str) -> None:
+        """Set error message."""
+        self._error_message = value
+
+    def transition_to(self: StateManager, new_state: VoiceState, error: str = "") -> None:
         """Transition to new state.
 
         Args:
@@ -159,26 +162,26 @@ class StateManager(IStateManager):
         if self._state_callback:
             self._state_callback(self._current_state_enum, self._error_message)
 
-    def can_start(self) -> bool:
+    def can_start(self: StateManager) -> bool:
         """Check if can start."""
         return self._current_state.can_start()
 
-    def can_stop(self) -> bool:
+    def can_stop(self: StateManager) -> bool:
         """Check if can stop."""
         return self._current_state.can_stop()
 
-    def set_state_callback(self, cb: StateCallback) -> None:
+    def set_state_callback(self: StateManager, cb: StateCallback) -> None:
         """Set state callback."""
         self._state_callback = cb
 
-    def handle_result(self, text: str, result_type: object) -> None:
+    def handle_result(self: StateManager, text: str, result_type: object) -> None:
         """Handle result - delegate to current state."""
         self._current_state.handle_result(text, result_type)
 
-    def handle_error(self, error_type: str, message: str) -> None:
+    def handle_error(self: StateManager, error_type: str, message: str) -> None:
         """Handle error - delegate to current state."""
         self._current_state.handle_error(error_type, message)
 
-    def handle_reconnecting(self, attempt: int) -> None:
+    def handle_reconnecting(self: StateManager, attempt: int) -> None:
         """Handle reconnecting - delegate to current state."""
         self._current_state.handle_reconnecting(attempt)

@@ -46,8 +46,24 @@ class AsrClientConfig:
     gain: float = 0.5  # 增益因子 (0.0 - 1.0)
     threshold: float = 0.01  # 阈值 (0.0 - 1.0)
 
+    # Valid port range constants
+    _MAX_PORT: int = 65535
+    _VALID_SAMPLE_RATES: tuple[int, int, int] = (16000, 44100, 48000)
+
+    def __post_init__(self: "AsrClientConfig") -> None:
+        """Validate configuration after initialization."""
+        if not self.host:
+            msg = "host cannot be empty"
+            raise ValueError(msg)
+        if self.port <= 0 or self.port > self._MAX_PORT:
+            msg = f"Invalid port: {self.port}"
+            raise ValueError(msg)
+        if self.sample_rate not in self._VALID_SAMPLE_RATES:
+            msg = f"Unsupported sample rate: {self.sample_rate}"
+            raise ValueError(msg)
+
     @classmethod
-    def from_config(cls, config: "Config") -> "AsrClientConfig":
+    def from_config(cls: type["AsrClientConfig"], config: "Config") -> "AsrClientConfig":
         """从配置创建 AsrClientConfig."""
         return cls(
             host=config.asr.server_host,

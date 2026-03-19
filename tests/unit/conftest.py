@@ -14,26 +14,16 @@ if str(src_path) not in sys.path:
     sys.path.insert(0, str(src_path))
 
 
-def pytest_configure(config):
-    """Configure pytest - run before any tests."""
-    # Create mock GTK modules
-    mock_gi = MagicMock()
+def _create_mock_glib():
+    """Create mock GLib module."""
     mock_glib = MagicMock()
-    mock_gtk = MagicMock()
-    mock_gobject = MagicMock()
-
-    # Configure GLib
     mock_glib.idle_add = MagicMock(return_value=False)
     mock_glib.timeout_add = MagicMock(return_value=0)
+    return mock_glib
 
-    # Create mock classes for Gtk
-    class MockApplicationWindow:
-        def __init__(self, *args, **kwargs):
-            pass
 
-    class MockApplication:
-        def __init__(self, *args, **kwargs):
-            pass
+def _create_mock_box():
+    """Create mock Box class."""
 
     class MockBox:
         def __init__(self, *args, **kwargs):
@@ -57,6 +47,12 @@ def pytest_configure(config):
         def append(self, w):
             pass
 
+    return MockBox
+
+
+def _create_mock_label():
+    """Create mock Label class."""
+
     class MockLabel:
         def __init__(self, *args, **kwargs):
             self._label = kwargs.get("label", "")
@@ -79,6 +75,12 @@ def pytest_configure(config):
         def set_max_width_chars(self, v):
             pass
 
+    return MockLabel
+
+
+def _create_mock_button():
+    """Create mock Button class."""
+
     class MockButton:
         def __init__(self, *args, **kwargs):
             pass
@@ -89,16 +91,29 @@ def pytest_configure(config):
         def set_label(self, text):
             pass
 
-    # Set mock classes to Gtk module
-    mock_gtk.ApplicationWindow = MockApplicationWindow
-    mock_gtk.Application = MockApplication
-    mock_gtk.Box = MockBox
-    mock_gtk.Label = MockLabel
-    mock_gtk.Button = MockButton
+    return MockButton
+
+
+def _create_mock_gtk():
+    """Create mock Gtk module with all required classes."""
+    mock_gtk = MagicMock()
+    mock_gtk.ApplicationWindow = type("MockApplicationWindow", (), {})
+    mock_gtk.Application = type("MockApplication", (), {})
+    mock_gtk.Box = _create_mock_box()
+    mock_gtk.Label = _create_mock_label()
+    mock_gtk.Button = _create_mock_button()
     mock_gtk.Orientation = MagicMock()
     mock_gtk.Align = MagicMock()
+    return mock_gtk
 
-    # Install mocks BEFORE any imports
+
+def pytest_configure(config):
+    """Configure pytest - run before any tests."""
+    mock_gi = MagicMock()
+    mock_glib = _create_mock_glib()
+    mock_gtk = _create_mock_gtk()
+    mock_gobject = MagicMock()
+
     sys.modules["gi"] = mock_gi
     sys.modules["gi.repository"] = MagicMock()
     sys.modules["gi.repository.Gtk"] = mock_gtk

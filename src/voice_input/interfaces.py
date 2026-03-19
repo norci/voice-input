@@ -50,7 +50,7 @@ ReconnectingCallback = Callable[[int], None]  # (attempt)
 class IVoiceService(Protocol):
     """语音服务接口 - Facade模式的外观接口."""
 
-    def start(self) -> bool:
+    def start(self: "IVoiceService") -> bool:
         """开始语音识别.
 
         Returns:
@@ -58,33 +58,33 @@ class IVoiceService(Protocol):
         """
         ...
 
-    def stop(self) -> None:
+    def stop(self: "IVoiceService") -> None:
         """停止语音识别."""
         ...
 
-    def reset(self) -> None:
+    def reset(self: "IVoiceService") -> None:
         """重置服务状态."""
         ...
 
     @property
-    def state(self) -> VoiceState:
+    def state(self: "IVoiceService") -> VoiceState:
         """获取当前状态."""
         ...
 
     @property
-    def error_message(self) -> str:
+    def error_message(self: "IVoiceService") -> str:
         """获取错误信息."""
         ...
 
-    def set_result_callback(self, cb: ResultCallback) -> None:
+    def set_result_callback(self: "IVoiceService", cb: ResultCallback) -> None:
         """设置结果回调."""
         ...
 
-    def set_error_callback(self, cb: ErrorCallback) -> None:
+    def set_error_callback(self: "IVoiceService", cb: ErrorCallback) -> None:
         """设置错误回调."""
         ...
 
-    def set_state_callback(self, cb: StateCallback) -> None:
+    def set_state_callback(self: "IVoiceService", cb: StateCallback) -> None:
         """设置状态变化回调."""
         ...
 
@@ -93,16 +93,16 @@ class IStateManager(Protocol):
     """状态管理器接口 - 状态模式."""
 
     @property
-    def state(self) -> VoiceState:
+    def state(self: "IStateManager") -> VoiceState:
         """获取当前状态."""
         ...
 
     @property
-    def error_message(self) -> str:
+    def error_message(self: "IStateManager") -> str:
         """获取错误信息."""
         ...
 
-    def transition_to(self, new_state: VoiceState, error: str = "") -> None:
+    def transition_to(self: "IStateManager", new_state: VoiceState, error: str = "") -> None:
         """状态转换.
 
         Args:
@@ -111,15 +111,15 @@ class IStateManager(Protocol):
         """
         ...
 
-    def can_start(self) -> bool:
+    def can_start(self: "IStateManager") -> bool:
         """检查是否可以开始识别."""
         ...
 
-    def can_stop(self) -> bool:
+    def can_stop(self: "IStateManager") -> bool:
         """检查是否可以停止识别."""
         ...
 
-    def set_state_callback(self, cb: StateCallback) -> None:
+    def set_state_callback(self: "IStateManager", cb: StateCallback) -> None:
         """设置状态变化回调."""
         ...
 
@@ -127,7 +127,7 @@ class IStateManager(Protocol):
 class IAudioEngine(Protocol):
     """音频引擎接口."""
 
-    def start(self) -> bool:
+    def start(self: "IAudioEngine") -> bool:
         """启动音频引擎.
 
         Returns:
@@ -135,26 +135,26 @@ class IAudioEngine(Protocol):
         """
         ...
 
-    def stop_sending(self) -> None:
+    def stop_sending(self: "IAudioEngine") -> None:
         """停止发送,保持接收.
 
         停止录音,但保持 WebSocket 连接继续接收识别结果.
         """
         ...
 
-    def stop(self) -> None:
+    def stop(self: "IAudioEngine") -> None:
         """完全停止音频引擎."""
         ...
 
-    def set_result_callback(self, cb: ResultCallback) -> None:
+    def set_result_callback(self: "IAudioEngine", cb: ResultCallback) -> None:
         """设置结果回调."""
         ...
 
-    def set_error_callback(self, cb: ErrorCallback) -> None:
+    def set_error_callback(self: "IAudioEngine", cb: ErrorCallback) -> None:
         """设置错误回调."""
         ...
 
-    def set_reconnecting_callback(self, cb: ReconnectingCallback) -> None:
+    def set_reconnecting_callback(self: "IAudioEngine", cb: ReconnectingCallback) -> None:
         """设置重连回调."""
         ...
 
@@ -162,11 +162,13 @@ class IAudioEngine(Protocol):
 class IConnectionManager(Protocol):
     """连接管理器接口 - 适配器模式."""
 
-    async def connect(self) -> None:
+    async def connect(self: "IConnectionManager") -> None:
         """建立连接."""
         ...
 
-    async def connect_with_retry(self, on_reconnecting: ReconnectingCallback | None = None) -> None:
+    async def connect_with_retry(
+        self: "IConnectionManager", on_reconnecting: ReconnectingCallback | None = None
+    ) -> None:
         """建立连接,支持重试.
 
         Args:
@@ -174,11 +176,11 @@ class IConnectionManager(Protocol):
         """
         ...
 
-    async def disconnect(self) -> None:
+    async def disconnect(self: "IConnectionManager") -> None:
         """断开连接."""
         ...
 
-    async def send(self, data: bytes) -> None:
+    async def send(self: "IConnectionManager", data: bytes) -> None:
         """发送数据.
 
         Args:
@@ -186,7 +188,7 @@ class IConnectionManager(Protocol):
         """
         ...
 
-    async def receive(self) -> bytes | None:
+    async def receive(self: "IConnectionManager") -> bytes | None:
         """接收数据.
 
         Returns:
@@ -195,7 +197,7 @@ class IConnectionManager(Protocol):
         ...
 
     @property
-    def is_connected(self) -> bool:
+    def is_connected(self: "IConnectionManager") -> bool:
         """检查是否已连接."""
         ...
 
@@ -215,7 +217,7 @@ class EventType(Enum):
 class IEventBus(Protocol):
     """事件总线接口 - 观察者模式."""
 
-    def subscribe(self, event_type: EventType, callback: Callable[..., Any]) -> None:
+    def subscribe(self: "IEventBus", event_type: EventType, callback: Callable[..., Any]) -> None:
         """订阅事件.
 
         Args:
@@ -224,7 +226,7 @@ class IEventBus(Protocol):
         """
         ...
 
-    def unsubscribe(self, event_type: EventType, callback: Callable[..., Any]) -> None:
+    def unsubscribe(self: "IEventBus", event_type: EventType, callback: Callable[..., Any]) -> None:
         """取消订阅.
 
         Args:
@@ -233,7 +235,7 @@ class IEventBus(Protocol):
         """
         ...
 
-    def publish(self, event_type: EventType, data: dict[str, Any]) -> None:
+    def publish(self: "IEventBus", event_type: EventType, data: dict[str, Any]) -> None:
         """发布事件.
 
         Args:
@@ -249,7 +251,7 @@ class IEventBus(Protocol):
 class IServiceFactory(Protocol):
     """服务工厂接口 - 工厂模式."""
 
-    def create_voice_service(self, config: object) -> IVoiceService:
+    def create_voice_service(self: "IServiceFactory", config: object) -> IVoiceService:
         """创建语音服务实例.
 
         Args:
@@ -260,7 +262,7 @@ class IServiceFactory(Protocol):
         """
         ...
 
-    def create_audio_engine(self, config: object) -> IAudioEngine:
+    def create_audio_engine(self: "IServiceFactory", config: object) -> IAudioEngine:
         """创建音频引擎实例.
 
         Args:
@@ -268,16 +270,5 @@ class IServiceFactory(Protocol):
 
         Returns:
             音频引擎实例
-        """
-        ...
-
-        # def create_connection_manager(self, config: object) -> IConnectionManager:
-        """创建连接管理器.
-
-        Args:
-            config: ASR 客户端配置
-
-        Returns:
-            连接管理器实例
         """
         ...

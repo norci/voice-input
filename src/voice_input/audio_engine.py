@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 class AudioEngine:
     """音频引擎 - 管理音频采集、发送和接收."""
 
-    def __init__(self, config: AsrClientConfig) -> None:
-        """初始化音频引擎.
+    def __init__(self: "AudioEngine", config: AsrClientConfig) -> None:
+        """Initialize audio engine.
 
         Args:
             config: ASR 配置
@@ -48,38 +48,36 @@ class AudioEngine:
         self._error_callback: Callable[[str, str], None] | None = None
         self._reconnecting_callback: Callable[[int], None] | None = None
 
-    def set_result_callback(self, cb: Callable[[str, ResultType], None]) -> None:
+    def set_result_callback(self: "AudioEngine", cb: Callable[[str, ResultType], None]) -> None:
         """设置结果回调."""
         self._result_callback = cb
 
-    def set_error_callback(self, cb: Callable[[str, str], None]) -> None:
+    def set_error_callback(self: "AudioEngine", cb: Callable[[str, str], None]) -> None:
         """设置错误回调."""
         self._error_callback = cb
 
-    def set_reconnecting_callback(self, cb: Callable[[int], None]) -> None:
+    def set_reconnecting_callback(self: "AudioEngine", cb: Callable[[int], None]) -> None:
         """设置重连回调."""
         self._reconnecting_callback = cb
 
-    def start(self) -> bool:
+    def start(self: "AudioEngine") -> bool:
         """启动音频引擎(录音+发送+接收).
 
         Returns:
             是否成功启动
         """
         if self._is_running:
-            logger.warning("AudioEngine 已在运行")
+            logger.warning("AudioEngine already running")
             return False
 
-        logger.info("AudioEngine.start() - 正在启动...")
+        logger.info("Starting AudioEngine")
+        self._clear_queue()  # Clear queue first to prevent race condition
         self._is_running = True
         self._is_sending = True
 
-        # 1. 清空队列
-        self._clear_queue()
-
-        # 2. 创建新的 ConnectionManager(支持重连)
+        # 创建新的 ConnectionManager(支持重连)
         self._conn_manager = ConnectionManager(self._config)
-        logger.info("AudioEngine.start() - ConnectionManager 已创建")
+        logger.info("ConnectionManager created")
 
         # 3. 启动录音
         try:
@@ -103,7 +101,7 @@ class AudioEngine:
             return False
 
         # 4. 启动事件循环线程
-        logger.info("AudioEngine.start() - 启动事件循环线程...")
+        logger.info("Starting event loop thread")
         self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
         self._thread = threading.Thread(
@@ -111,32 +109,32 @@ class AudioEngine:
         )
         self._thread.start()
 
-        logger.info("AudioEngine.start() - 启动完成")
+        logger.info("AudioEngine started successfully")
         return True
 
-    def stop_sending(self) -> None:
+    def stop_sending(self: "AudioEngine") -> None:
         """停止发送,保持接收.
 
         停止录音,但保持 WebSocket 连接继续接收识别结果.
         """
-        logger.info("AudioEngine.stop_sending() - 正在停止录音和发送...")
+        logger.info("Stopping audio recording and sending")
         self._is_sending = False
 
         if self._audio_recorder:
             self._audio_recorder.stop()
-            logger.info("AudioEngine.stop_sending() - AudioRecorder 已停止")
+            logger.info("AudioRecorder stopped")
 
         self._clear_queue()
-        logger.info("AudioEngine.stop_sending() - 完成,保持接收")
+        logger.info("stop_sending completed, keeping receiver")
 
-    def stop(self) -> None:
+    def stop(self: "AudioEngine") -> None:
         """完全停止音频引擎."""
-        logger.info("AudioEngine.stop() - 正在完全停止...")
+        logger.info("Stopping AudioEngine")
         with self._running_lock:
-            logger.info(f"AudioEngine.stop() - 当前 _is_running: {self._is_running}")
+            logger.debug("Current _is_running: %s", self._is_running)
             self._is_running = False
             self._is_sending = False
-            logger.info(f"AudioEngine.stop() - 设置后 _is_running: {self._is_running}")
+            logger.debug("Set _is_running to: %s", self._is_running)
 
         if self._audio_recorder:
             self._audio_recorder.stop()
@@ -147,12 +145,12 @@ class AudioEngine:
         # 不再强制取消任务,让它们自然退出
         # 关闭事件循环(如果还在运行)
         if self._loop and self._loop.is_running():
-            logger.info("AudioEngine.stop() - 停止事件循环")
+            logger.info("Stopping event loop")
             self._loop.call_soon_threadsafe(self._loop.stop)
 
-        logger.info("AudioEngine.stop() - 信号已发送,等待任务退出")
+        logger.info("Stop signal sent, waiting for tasks to exit")
 
-    def _clear_queue(self) -> None:
+    def _clear_queue(self: "AudioEngine") -> None:
         """清空音频队列."""
         while not self._audio_queue.empty():
             try:
@@ -160,7 +158,7 @@ class AudioEngine:
             except queue.Empty:
                 break
 
-    def _run_event_loop(self) -> None:
+    def _run_event_loop(self: "AudioEngine") -> None:
         """事件循环后台线程."""
 
         async def main() -> None:
@@ -197,12 +195,12 @@ class AudioEngine:
             # 清理
             self._conn_manager = None
 
-    def _on_reconnecting(self, attempt: int) -> None:
+    def _on_reconnecting(self: "AudioEngine", attempt: int) -> None:
         """重连回调."""
         if self._reconnecting_callback:
             self._reconnecting_callback(attempt)
 
-    async def _send_loop(self) -> None:
+    async def _send_loop(self: "AudioEngine") -> None:
         """发送循环 - 检查 _is_sending"""
         logger.debug("发送循环启动")
         while self._is_running and self._is_sending:
@@ -226,11 +224,11 @@ class AudioEngine:
 
             except Exception as e:
                 logger.error(f"音频发送失败: {e}", exc_info=True)
-                # 停止发送循环，但不退出，等待 _is_sending 标志被外部设置
+                # Stop send loop, but don't exit - wait for _is_sending flag
                 await asyncio.sleep(0.5)
         logger.debug("发送循环结束")
 
-    async def _receive_loop(self) -> None:
+    async def _receive_loop(self: "AudioEngine") -> None:
         """接收循环 - 始终运行直到完全停止,自动重连"""
         logger.debug("接收循环启动")
         while self._is_running:
@@ -264,7 +262,7 @@ class AudioEngine:
 
         logger.debug("接收循环结束")
 
-    def _process_result(self, result: AsrResultDict) -> None:
+    def _process_result(self: "AudioEngine", result: AsrResultDict) -> None:
         """处理识别结果."""
         text = result.get("text", "")
         mode = result.get("mode", "")
@@ -275,7 +273,7 @@ class AudioEngine:
 
         if mode in ("offline", "2pass-offline") or is_final:
             result_type = ResultType.FINAL
-            # 不在日志中记录语音识别结果，以保护隐私
+            # Don't log speech recognition results for privacy
         else:
             result_type = ResultType.INTERIM
             logger.debug(f"AudioEngine._process_result() - INTERIM: {text}")

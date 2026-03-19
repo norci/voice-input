@@ -99,7 +99,7 @@ class TestConfig:
 
     def test_from_dict_partial(self) -> None:
         """测试从部分字典创建。"""
-        data = {"window": {}}
+        data: dict[str, object] = {"window": {}}
         config = Config.from_dict(data)
 
         # Window config should be empty

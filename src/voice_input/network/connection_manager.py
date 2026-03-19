@@ -31,13 +31,13 @@ class ConnectionState(Enum):
     CLOSING = "closing"
 
 
-RECONNECT_DELAY = 3
+RECONNECT_DELAY = 3.0
 
 
 class ConnectionManager:
     """管理 WebSocket 连接生命周期,线程安全."""
 
-    def __init__(self, config: "AsrClientConfig") -> None:
+    def __init__(self: "ConnectionManager", config: "AsrClientConfig") -> None:
         """初始化连接管理器.
 
         Args:
@@ -58,16 +58,16 @@ class ConnectionManager:
         self._uri = f"wss://{self._config.host}:{self._config.port}"
 
     @property
-    def is_connected(self) -> bool:
+    def is_connected(self: "ConnectionManager") -> bool:
         """检查是否已连接."""
         return self.state == ConnectionState.CONNECTED
 
-    async def connect(self) -> None:
+    async def connect(self: "ConnectionManager") -> None:
         """建立连接."""
         await self._connect_impl()
 
     async def connect_with_retry(
-        self, on_reconnecting: "Callable[[int], None] | None" = None
+        self: "ConnectionManager", on_reconnecting: "Callable[[int], None] | None" = None
     ) -> None:
         """建立连接,带最大重试次数限制.
 
@@ -81,13 +81,19 @@ class ConnectionManager:
         while True:
             if not self._should_reconnect or attempt >= max_attempts:
                 if attempt >= max_attempts:
-                    logger.warning(f"达到最大重试次数 ({max_attempts}),停止重连")
+                    logger.warning("Max retry attempts reached (%d), stopping", max_attempts)
                 break
             try:
                 await self._connect_impl()
             except ConnectionError as e:
                 attempt += 1
-                logger.warning(f"连接失败 ({attempt}/{max_attempts}),{delay}秒后重试: {e}")
+                logger.warning(
+                    "Connection failed (%d/%d), retrying in %ds: %s",
+                    attempt,
+                    max_attempts,
+                    delay,
+                    e,
+                )
                 if on_reconnecting:
                     on_reconnecting(attempt)
                 await asyncio.sleep(delay)
@@ -96,12 +102,12 @@ class ConnectionManager:
                 return
 
     @property
-    def state(self) -> ConnectionState:
+    def state(self: "ConnectionManager") -> ConnectionState:
         """获取连接状态."""
         with self._lock:
             return self._state
 
-    async def _connect_impl(self) -> websockets.ClientConnection:
+    async def _connect_impl(self: "ConnectionManager") -> websockets.ClientConnection:
         """内部连接实现.
 
         Returns:
@@ -128,7 +134,13 @@ class ConnectionManager:
                 ping_interval=None,
                 ssl=self._ssl_context,
             )
-
+        except Exception as e:
+            with self._lock:
+                self._state = ConnectionState.DISCONNECTED
+            logger.exception("Connection failed")
+            msg = f"Connection failed: {e}"
+            raise ConnectionError(msg) from e
+        else:
             init_msg = {
                 "mode": self._config.mode,
                 "chunk_size": [int(x) for x in self._config.chunk_size.split(",")],
@@ -141,15 +153,10 @@ class ConnectionManager:
                 self._ws = ws
                 self._state = ConnectionState.CONNECTED
 
-            logger.info("WebSocket 连接已建立")
-        except Exception as e:
-            with self._lock:
-                self._state = ConnectionState.DISCONNECTED
-            logger.exception("Connection failed")
-            msg = f"连接失败: {e}"
-            raise ConnectionError(msg) from e
+            logger.info("WebSocket connected")
+            return ws
 
-    async def disconnect(self) -> None:
+    async def disconnect(self: "ConnectionManager") -> None:
         """断开 WebSocket 连接."""
         with self._lock:
             if self._state == ConnectionState.DISCONNECTED:
@@ -165,9 +172,9 @@ class ConnectionManager:
         if ws_to_close:
             with suppress(Exception):
                 await ws_to_close.close()
-            logger.info("WebSocket 连接已断开")
+            logger.info("WebSocket disconnected")
 
-    async def send(self, data: bytes) -> None:
+    async def send(self: "ConnectionManager", data: bytes) -> None:
         """Send data.
 
         Args:
@@ -181,7 +188,7 @@ class ConnectionManager:
 
         await ws.send(data)
 
-    async def receive(self) -> bytes | None:
+    async def receive(self: "ConnectionManager") -> bytes | None:
         """Receive data.
 
         Returns:
@@ -194,7 +201,9 @@ class ConnectionManager:
             ws = self._ws
 
         try:
-            data: bytes = await ws.recv()
+            data: str | bytes = await ws.recv()
+            if isinstance(data, str):
+                data = data.encode("utf-8")
         except websockets.exceptions.ConnectionClosed:
             return None
         except Exception:

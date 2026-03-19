@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class VoiceGUIApplication(Gtk.Application):
     """Full-featured compact GUI application."""
 
-    def __init__(self: "VoiceGUIApplication", config: Config, voice_service: IVoiceService) -> None:
+    def __init__(self: VoiceGUIApplication, config: Config, voice_service: IVoiceService) -> None:
         """Initialize application."""
         super().__init__(application_id="com.voiceinput.gui", flags=0)
         self._config = config
@@ -37,7 +37,7 @@ class VoiceGUIApplication(Gtk.Application):
         self._socket_manager = SocketManager(self._socket_path)
         self._action_queue: queue.Queue[str] = queue.Queue()
 
-    def do_activate(self) -> None:
+    def do_activate(self: VoiceGUIApplication) -> None:
         """Callback when application is activated."""
         if not self._window:
             self._window = VoiceGUIWindow(self, self._config, self._voice_service)
@@ -54,7 +54,7 @@ class VoiceGUIApplication(Gtk.Application):
         else:
             self._window.present()
 
-    def _handle_socket_command(self: "VoiceGUIApplication", cmd: str) -> None:
+    def _handle_socket_command(self: VoiceGUIApplication, cmd: str) -> None:
         """Handle Socket command."""
         if cmd == "toggle":
             self._action_queue.put("toggle")
@@ -63,7 +63,7 @@ class VoiceGUIApplication(Gtk.Application):
         else:
             logger.warning(f"收到未知命令: {cmd}")
 
-    def _process_actions(self: "VoiceGUIApplication") -> bool:
+    def _process_actions(self: VoiceGUIApplication) -> bool:
         """Process callback queue (in GTK main thread)."""
         if self._is_exiting:
             return False
@@ -79,10 +79,11 @@ class VoiceGUIApplication(Gtk.Application):
             pass
         return True
 
-    def do_shutdown(self: "VoiceGUIApplication") -> None:
+    def do_shutdown(self: VoiceGUIApplication) -> None:
         """Callback when application shuts down."""
+        logger.info("Shutting down voice input application")
         self._socket_manager.stop_server()
-        super().do_shutdown()
+        Gtk.Application.do_shutdown(self)
 
 
 def main() -> None:
@@ -103,7 +104,7 @@ def main() -> None:
     try:
         config = load_config()
     except Exception as e:
-        logger.error(f"加载配置失败，使用默认配置: {e}", exc_info=True)
+        logger.error(f"加载配置失败,使用默认配置: {e}", exc_info=True)
         config = Config()
 
     # Create ASR config and voice service

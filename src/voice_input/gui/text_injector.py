@@ -10,11 +10,11 @@ logger = logging.getLogger(__name__)
 class TextInjector:
     """Text injector - inserts text at cursor position."""
 
-    def __init__(self) -> None:
+    def __init__(self: "TextInjector") -> None:
         self._lock = threading.Lock()
         self._last_injected_text = ""
 
-    def inject(self, text: str) -> bool:
+    def inject(self: "TextInjector", text: str) -> bool:
         """Inject text into active window."""
         if not text or not isinstance(text, str) or not text.strip():
             return False
@@ -25,7 +25,7 @@ class TextInjector:
         with self._lock:
             try:
                 result = subprocess.run(
-                    ["wtype", f"{text}"],
+                    ["wtype", "--", text],
                     capture_output=True,
                     text=True,
                     timeout=2,

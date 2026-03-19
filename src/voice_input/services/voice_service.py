@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class VoiceService(IVoiceService):
     """Facade implementation for voice service."""
 
-    def __init__(self, config: AsrClientConfig) -> None:
+    def __init__(self: "VoiceService", config: AsrClientConfig) -> None:
         """Initialize voice service.
 
         Args:
@@ -47,28 +47,28 @@ class VoiceService(IVoiceService):
         self._audio_engine.set_reconnecting_callback(self._on_reconnecting)
 
     @property
-    def state(self) -> VoiceState:
+    def state(self: "VoiceService") -> VoiceState:
         """Get current state."""
         return self._state
 
     @property
-    def error_message(self) -> str:
+    def error_message(self: "VoiceService") -> str:
         """Get error message."""
         return self._error_message
 
-    def set_result_callback(self, cb: ResultCallback) -> None:
+    def set_result_callback(self: "VoiceService", cb: ResultCallback) -> None:
         """Set result callback."""
         self._result_callback = cb
 
-    def set_error_callback(self, cb: ErrorCallback) -> None:
+    def set_error_callback(self: "VoiceService", cb: ErrorCallback) -> None:
         """Set error callback."""
         self._error_callback = cb
 
-    def set_state_callback(self, cb: StateCallback) -> None:
+    def set_state_callback(self: "VoiceService", cb: StateCallback) -> None:
         """Set state change callback."""
         self._state_callback = cb
 
-    def start(self) -> bool:
+    def start(self: "VoiceService") -> bool:
         """Start voice recognition."""
         if self._state not in (VoiceState.IDLE, VoiceState.ERROR):
             logger.warning("Cannot start from state: %s", self._state)
@@ -76,7 +76,7 @@ class VoiceService(IVoiceService):
 
         self._error_message = ""
         self._state = VoiceState.IDLE
-        logger.info("VoiceService starting")
+        logger.info("Starting VoiceService")
 
         ok: bool = self._audio_engine.start()
         if ok:
@@ -88,22 +88,21 @@ class VoiceService(IVoiceService):
 
         return ok
 
-    def stop(self) -> None:
+    def stop(self: "VoiceService") -> None:
         """Stop voice recognition."""
         if self._state != VoiceState.RECORDING:
             logger.warning("Cannot stop from state: %s", self._state)
             return
 
-        logger.info("VoiceService stopping - recording and sending")
+        logger.info("Stopping VoiceService, recording and sending")
         self._audio_engine.stop_sending()
         self._state = VoiceState.POST_PROCESSING
         logger.info("State: RECORDING -> POST_PROCESSING")
         self._notify_state_change()
 
         def timeout_callback() -> None:
-            # 使用锁保护 _audio_engine 访问
             with self._timer_lock:
-                if self._state == VoiceState.POST_PROCESSING and self._audio_engine is not None:
+                if self._state == VoiceState.POST_PROCESSING:
                     logger.info("POST_PROCESSING timeout, returning to IDLE")
                     self._state = VoiceState.IDLE
                     self._audio_engine.stop()
@@ -113,26 +112,26 @@ class VoiceService(IVoiceService):
             self._post_process_timer = threading.Timer(3.0, timeout_callback)
             self._post_process_timer.daemon = True
             self._post_process_timer.start()
-        logger.info("Started 3s timeout timer")
+        logger.info("Started 3s post-processing timeout")
 
-    def reset(self) -> None:
+    def reset(self: "VoiceService") -> None:
         """Reset service state."""
-        logger.info("VoiceService resetting")
+        logger.info("Resetting VoiceService")
 
         with self._timer_lock:
             if self._audio_engine:
                 self._audio_engine.stop()
             self._state = VoiceState.IDLE
             self._error_message = ""
-        logger.info("State -> IDLE via reset")
+        logger.info("State: any -> IDLE (reset)")
         self._notify_state_change()
 
-    def _notify_state_change(self) -> None:
+    def _notify_state_change(self: "VoiceService") -> None:
         """Notify state change."""
         if self._state_callback:
             self._state_callback(self._state, self._error_message)
 
-    def _on_engine_result(self, text: str, result_type: ResultType) -> None:
+    def _on_engine_result(self: "VoiceService", text: str, result_type: ResultType) -> None:
         """Audio engine result callback."""
         logger.debug("Result: %s: %s", result_type.value, text)
 
@@ -150,7 +149,7 @@ class VoiceService(IVoiceService):
         if self._result_callback:
             self._result_callback(text, result_type)
 
-    def _on_engine_error(self, error_type: str, message: str) -> None:
+    def _on_engine_error(self: "VoiceService", error_type: str, message: str) -> None:
         """Audio engine error callback."""
         logger.error("Engine error: %s: %s", error_type, message)
         self._state = VoiceState.ERROR
@@ -159,7 +158,7 @@ class VoiceService(IVoiceService):
         if self._error_callback:
             self._error_callback(error_type, message)
 
-    def _on_reconnecting(self, attempt: int) -> None:
+    def _on_reconnecting(self: "VoiceService", attempt: int) -> None:
         """Reconnecting callback."""
         logger.info("Reconnecting (attempt %d)", attempt)
         if self._state in (VoiceState.RECORDING, VoiceState.POST_PROCESSING):
