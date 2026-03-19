@@ -31,7 +31,6 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
 
         self._config = config
         self._voice_service = voice_service
-        self._ui_manager: UIManager
         self._is_exiting = False
         self._text_injector: TextInjector = TextInjector()
 
@@ -42,6 +41,14 @@ class VoiceGUIWindow(Gtk.ApplicationWindow):
         self.set_decorated(False)
 
         self._setup_ui()
+
+        # UIManager needs GTK components initialized first, so after _setup_ui
+        self._ui_manager = UIManager(
+            result_label=self._result_label,
+            status_indicator=self._status_indicator,
+            toggle_button=self._toggle_button,
+        )
+
         self.connect("close-request", self._on_close)
 
         # Wire up service callbacks
