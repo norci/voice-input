@@ -98,7 +98,7 @@ Wants=graphical-session.target
 Type=simple
 User=%u
 WorkingDirectory=${PROJECT_PATH}
-ExecStart=${UV_EXEC} --directory ${PROJECT_PATH}/FunASR/runtime/python/websocket run funasr_wss_server.py --host 127.0.0.1 --port 10095
+ExecStart=${UV_EXEC} --directory ${PROJECT_PATH}/FunASR/runtime/python/websocket run funasr_wss_server.py --host 127.0.0.1 --port 10095 --device cpu
 Restart=on-failure
 RestartSec=5
 

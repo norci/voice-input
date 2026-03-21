@@ -109,7 +109,7 @@ class VoiceService(IVoiceService):
                     self._notify_state_change()
 
         with self._timer_lock:
-            self._post_process_timer = threading.Timer(3.0, timeout_callback)
+            self._post_process_timer = threading.Timer(1.0, timeout_callback)
             self._post_process_timer.daemon = True
             self._post_process_timer.start()
         logger.info("Started 3s post-processing timeout")
